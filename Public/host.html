@@ -223,8 +223,8 @@
 
   <section id="o-guess" hidden>
     <div class="grow">
-      <h2 class="headline" id="og-head"></h2>
-      <p class="hint" id="og-hint"></p>
+      <h2 class="headline">اللي برا السالفة يخمّن الكلمة الحين</h2>
+      <p class="hint">التصويت خلص، والنتيجة بعد التخمين. لو خمّن الكلمة صح، ياخذ نقطة زيادة.</p>
     </div>
   </section>
 
@@ -473,25 +473,21 @@
     'o-voting'() {
       fillChips($('#ov-players'), S.g.done);
     },
-    'o-guess'() {
-      const n = nameOf(S.g.accused);
-      $('#og-head').textContent = `مسكتوا ${n}!`;
-      $('#og-hint').textContent = `صح، ${n} برا السالفة. باقي فرصة أخيرة: لو انختارت الكلمة الصحيحة من الجوال، النقطتين لـ ${n}.`;
-    },
     'o-result'() {
       const g = S.g;
       const out = nameOf(g.outsider);
       const heads = {
-        caught: [`كشفتوا ${out}!`, 'والكلمة ما انعرفت. نقطة لكل واحد كان يعرفها.'],
-        guessed: [`كشفتوا ${out}… بس التخمين طلع صح!`, `نقطتين لـ ${out}.`],
-        escaped: [`ما أحد كشف ${out}!`, `الأصوات ما اتفقت على أحد، واللي برا السالفة كان ${out}. نقطتين لـ ${out}.`],
+        caught: [`كشفتوا ${out}!`, 'نقطة لكل واحد كان يعرف الكلمة.'],
+        escaped: [`ما أحد كشف ${out}!`, `الأصوات ما اتفقت على أحد. نقطتين لـ ${out}.`],
         framed: [`ظلمتوا ${nameOf(g.accused)}!`, `اللي برا السالفة كان ${out}، والنقطتين لـ ${out}.`],
       };
+      const guessLine = g.guess == null ? 'وما وصل تخمين.'
+        : g.guessed ? `والتخمين طلع صح: نقطة زيادة لـ ${out}.` : 'والتخمين طلع غلط.';
       $('#ox-head').textContent = heads[g.outcome][0];
-      $('#ox-sub').textContent = heads[g.outcome][1];
+      $('#ox-sub').textContent = `${heads[g.outcome][1]} ${guessLine}`;
       $('#ox-cat').textContent = `الكلمة كانت (${g.category})`;
       $('#ox-word').textContent = g.word;
-      $('#ox-guess').textContent = g.guess ? `خمّن: ${g.guess}` : '';
+      $('#ox-guess').textContent = g.guess ? `التخمين: ${g.guess} ${g.guessed ? '✓' : '✗'}` : 'ما فيه تخمين';
       const votes = $('#ox-votes');
       votes.replaceChildren();
       for (const p of S.players) {

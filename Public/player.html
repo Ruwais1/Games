@@ -155,15 +155,15 @@
   </section>
 
   <section id="o-guess" hidden>
-    <h2 class="q">انمسكت! بس عندك فرصة أخيرة</h2>
-    <p class="muted">وش الكلمة؟ لو خمّنتها صح، تاخذ النقطتين.</p>
+    <h2 class="q">وش الكلمة؟</h2>
+    <p class="muted">التصويت خلص. خمّن الكلمة، ولو طلعت صح تاخذ نقطة زيادة.</p>
     <div class="opts grid tilt" id="og-opts"></div>
     <p class="err" id="og-err" role="alert"></p>
   </section>
 
   <section id="o-guess-wait" class="center" hidden>
-    <p class="status" id="ogw-status"></p>
-    <p class="muted">باقي التخمين الأخير…</p>
+    <p class="status">اللي برا السالفة يخمّن الكلمة الحين</p>
+    <p class="muted">النتيجة بعد التخمين…</p>
   </section>
 
   <section id="o-result" class="center" hidden>
@@ -498,18 +498,20 @@
         }
         show('o-guess');
       } else {
-        $('#ogw-status').textContent = `مسكتوا ${nameOf(g.accused)}!`;
         show('o-guess-wait');
       }
     } else if (g.phase === 'result') {
       const out = nameOf(g.outsider);
       const iAmOut = mine.role === 'outsider';
       const lines = iAmOut
-        ? { caught: 'انكشفت وما عرفت الكلمة.', guessed: 'انكشفت، بس عرفت الكلمة!', escaped: 'فلت منهم!', framed: `فلت، وظلموا ${nameOf(g.accused)}!` }
-        : { caught: `كشفتوا ${out}!`, guessed: `كشفتوا ${out}، بس التخمين طلع صح.`, escaped: `ما أحد كشف ${out}، وكان برا السالفة.`, framed: `ظلمتوا ${nameOf(g.accused)}، واللي برا السالفة كان ${out}.` };
+        ? { caught: 'انكشفت.', escaped: 'فلت منهم!', framed: `فلت، وظلموا ${nameOf(g.accused)}!` }
+        : { caught: `كشفتوا ${out}!`, escaped: `ما أحد كشف ${out}، وكان برا السالفة.`, framed: `ظلمتوا ${nameOf(g.accused)}، واللي برا السالفة كان ${out}.` };
+      const guessLine = g.guess == null ? '' : iAmOut
+        ? (g.guessed ? ' وعرفت الكلمة!' : ' والتخمين طلع غلط.')
+        : (g.guessed ? ' والتخمين طلع صح.' : ' والتخمين طلع غلط.');
       $('#ox-gain').textContent = mine.gain ? `+${fmt(mine.gain)}` : 'صفر';
       $('#ox-gain').classList.toggle('zero', !mine.gain);
-      $('#ox-verdict').textContent = lines[g.outcome];
+      $('#ox-verdict').textContent = lines[g.outcome] + guessLine;
       $('#ox-word').textContent = `الكلمة كانت: «${g.word}»`;
       $('#ox-total').textContent = `مجموعك: ${fmt(S.me.score)}`;
       show('o-result');
