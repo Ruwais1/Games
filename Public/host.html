@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ألعاب السهرة: الشاشة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  main {
+    flex: 1; width: 100%; max-width: 1500px; margin: 0 auto;
+    padding: clamp(16px, 2.6vw, 44px) clamp(16px, 3vw, 48px) 72px;
+    display: flex; flex-direction: column; gap: clamp(14px, 2vw, 28px);
+  }
+  main > section { flex: 1; display: flex; flex-direction: column; gap: clamp(18px, 2.4vw, 36px); }
+
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--mist); font-size: clamp(1rem, 1.5vw, 1.5rem); min-height: clamp(64px, 7vw, 108px); }
+  .topbar .wordmark { font-size: clamp(1.6rem, 2.6vw, 2.6rem); }
+  .timer {
+    --p: 1;
+    width: clamp(64px, 7vw, 108px); aspect-ratio: 1; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--display); font-size: clamp(1.6rem, 2.8vw, 3rem); color: var(--paper);
+    background:
+      radial-gradient(closest-side, var(--night) 79%, transparent 81%),
+      conic-gradient(var(--ring, var(--accent)) calc(var(--p) * 360deg), var(--night-3) 0);
+  }
+  .timer.low { --ring: var(--stamp); }
+  .timer.idle { visibility: hidden; }
+
+  .question {
+    font-family: var(--display); font-weight: 400;
+    font-size: clamp(2rem, 4.8vw, 4.8rem); line-height: 1.4;
+    margin: 0 auto; max-width: 26ch; text-align: center; text-wrap: balance;
+  }
+  .question.small { font-size: clamp(1.4rem, 2.6vw, 2.6rem); max-width: 40ch; }
+  .headline { font-family: var(--display); font-weight: 400; font-size: clamp(2.4rem, 5.4vw, 5.4rem); line-height: 1.25; margin: 0; text-align: center; text-wrap: balance; }
+  .hint { margin: 0; text-align: center; color: var(--mist); font-size: clamp(1.05rem, 1.7vw, 1.7rem); text-wrap: balance; }
+  .grow { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: clamp(16px, 2.2vw, 34px); }
+  main > section .chips { justify-content: center; }
+  .chip { font-size: clamp(1rem, 1.5vw, 1.5rem); }
+  .actions { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+  .tag { align-self: center; background: var(--night-2); border-radius: 999px; padding: .2em 1.1em; font-size: clamp(1rem, 1.5vw, 1.5rem); }
+
+  /* القائمة */
+  .lobby { flex: 1; display: grid; grid-template-columns: 1fr minmax(260px, 380px); gap: clamp(24px, 4vw, 72px); align-items: center; }
+  .lobby-title { font-family: var(--display); font-weight: 400; font-size: clamp(2.4rem, 4.4vw, 4.4rem); line-height: 1.2; margin: 0 0 .5em; }
+  .games { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin-bottom: clamp(18px, 2.2vw, 30px); }
+  .game-card {
+    border: 0; text-align: start; display: flex; flex-direction: column; gap: .35em;
+    padding: 1em 1.2em .9em; opacity: .78; transition: transform .15s, opacity .15s;
+  }
+  .game-card:nth-child(1) { transform: rotate(-1deg); }
+  .game-card:nth-child(2) { transform: rotate(1deg); }
+  .game-card[aria-pressed="true"] {
+    opacity: 1; transform: translateY(-4px) rotate(0);
+    box-shadow: 0 0 0 5px var(--accent), 6px 8px 0 5px rgba(0, 0, 0, .35);
+  }
+  .game-card .wordmark { color: var(--accent-ink); font-size: clamp(2rem, 3.4vw, 3.3rem); }
+  .game-tag { font-size: clamp(1rem, 1.35vw, 1.3rem); line-height: 1.5; }
+  .game-meta { font-size: clamp(.9rem, 1.1vw, 1.05rem); color: var(--ink-soft); }
+  .settings { display: flex; flex-direction: column; gap: .65rem; margin-bottom: clamp(16px, 2vw, 28px); }
+  .setting { display: grid; grid-template-columns: minmax(140px, 230px) 1fr; align-items: center; gap: .9rem; }
+  .setting-label { color: var(--mist); font-size: clamp(.95rem, 1.25vw, 1.2rem); }
+  .seg button { font-size: clamp(.95rem, 1.2vw, 1.15rem); }
+  .players-row { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin-bottom: clamp(14px, 1.8vw, 24px); }
+  .players-row .label { color: var(--mist); }
+  .start-row { display: flex; align-items: center; flex-wrap: wrap; gap: 1.2rem; }
+  .count { margin: 0; color: var(--mist); font-size: clamp(1rem, 1.35vw, 1.3rem); }
+  .qr-card { justify-self: center; width: 100%; text-align: center; padding: clamp(14px, 1.6vw, 24px); transform: rotate(1.5deg); }
+  .qr-card img { display: block; width: 100%; height: auto; border-radius: 4px; image-rendering: pixelated; }
+  .qr-card .scan { font-family: var(--display); font-size: clamp(1.3rem, 2vw, 2rem); margin: .5em 0 0; }
+  .qr-card .url { direction: ltr; font-size: clamp(.85rem, 1.15vw, 1.1rem); color: var(--ink-soft); margin: .1em 0 0; word-break: break-all; }
+
+  /* الكذّاب */
+  .options {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+    gap: clamp(22px, 2.6vw, 40px);
+  }
+  .options .card {
+    min-height: 4.4em; display: flex; flex-direction: column; justify-content: center;
+    text-align: center; font-size: clamp(1.3rem, 2.2vw, 2.2rem); font-weight: 600; line-height: 1.35;
+  }
+  .who { font-size: .55em; font-weight: 400; color: var(--ink-soft); margin-top: .45em; line-height: 1.5; }
+  .card.is-truth { box-shadow: 0 0 0 4px var(--truth), 5px 6px 0 4px rgba(0, 0, 0, .35); }
+
+  .reveal { display: grid; grid-template-columns: 1fr minmax(230px, 300px); gap: clamp(22px, 3vw, 50px); align-items: start; }
+  .reveal .options { padding-top: .8em; }
+  .board { background: var(--night-2); border-radius: 14px; padding: 1rem 1.2rem; }
+  .board h3 { font-family: var(--display); font-weight: 400; color: var(--accent); font-size: 1.9rem; margin: 0 0 .3em; }
+  .board ol { list-style: none; margin: 0; padding: 0; }
+  .board li { display: flex; justify-content: space-between; align-items: center; gap: .5em; padding: .45em 0; border-bottom: 1px solid var(--night-3); font-size: 1.3rem; }
+  .board li:last-child { border-bottom: 0; }
+  .pts { display: flex; align-items: center; gap: .6em; }
+  .gain { background: var(--accent); color: var(--ink); border-radius: 999px; padding: .05em .55em; font-size: .85em; font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+  .total { font-family: var(--display); min-width: 1.6em; text-align: end; }
+
+  /* برا السالفة */
+  .turn { text-align: center; font-family: var(--display); line-height: 1.15; margin: 0; }
+  .turn .name { display: block; color: var(--accent); font-size: clamp(3rem, 8vw, 7.5rem); }
+  .turn .asks { display: block; color: var(--mist); font-size: clamp(1.4rem, 2.4vw, 2.4rem); margin: .2em 0; }
+  .result-main { display: flex; flex-direction: column; gap: clamp(18px, 2.2vw, 30px); }
+  .word-card { align-self: center; display: flex; flex-direction: column; align-items: center; text-align: center; padding: .7em 2.2em .8em; transform: rotate(-1.5deg); }
+  .word-card .label { color: var(--ink-soft); font-size: clamp(1rem, 1.4vw, 1.35rem); }
+  .word-card .big { font-family: var(--display); font-size: clamp(2.6rem, 5vw, 4.6rem); line-height: 1.3; }
+  .votes { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; }
+  .votes li { background: var(--night-2); border-radius: 10px; padding: .3em .9em; font-size: clamp(1rem, 1.4vw, 1.35rem); }
+  .votes b { color: var(--accent); font-weight: 600; }
+
+  /* النهاية */
+  .final { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2rem; text-align: center; }
+  .winner-label { margin: 0; color: var(--mist); font-size: clamp(1.2rem, 2vw, 2rem); }
+  .winner { margin: 0; font-family: var(--display); font-weight: 400; color: var(--accent); font-size: clamp(4rem, 11vw, 10rem); line-height: 1.1; }
+  .ranking { list-style: none; margin: 0 0 1rem; padding: 0; width: min(540px, 100%); }
+  .ranking li { display: flex; justify-content: space-between; padding: .5em .2em; border-bottom: 1px solid var(--night-3); font-size: 1.5rem; }
+
+  .tools { position: fixed; bottom: 14px; left: 14px; display: flex; gap: .6rem; }
+  .offline { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--stamp); color: #fff; padding: .4em 1.1em; border-radius: 10px; }
+
+  @media (max-width: 860px) {
+    .lobby, .reveal { grid-template-columns: 1fr; }
+    .lobby .qr-card { max-width: 300px; }
+    .setting { grid-template-columns: 1fr; gap: .35rem; }
+  }
+</style>
+</head>
+<body data-game="kaddab">
+<main>
+  <header class="topbar" id="topbar" hidden>
+    <span class="wordmark" id="game-title"></span>
+    <span id="round"></span>
+    <div class="timer idle" id="timer"></div>
+  </header>
+
+  <!-- القائمة: اختيار اللعبة والإعدادات -->
+  <section id="lobby">
+    <div class="lobby">
+      <div>
+        <h1 class="lobby-title">وش نلعب الليلة؟</h1>
+        <div class="games" id="games"></div>
+        <div class="settings" id="settings"></div>
+        <div class="players-row"><span class="label">داخلين:</span><ul class="chips" id="lobby-players"></ul></div>
+        <div class="start-row">
+          <button class="btn" id="start" disabled>ابدأ</button>
+          <p class="count" id="lobby-count"></p>
+        </div>
+      </div>
+      <div class="card qr-card">
+        <img id="qr" alt="باركود الدخول">
+        <p class="scan">امسح وادخل</p>
+        <p class="url" id="qr-url"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- الكذّاب -->
+  <section id="k-writing" hidden>
+    <div class="grow">
+      <h2 class="question" id="kw-question"></h2>
+      <p class="hint">اكتبوا كذبة مقنعة على جوالاتكم.</p>
+    </div>
+    <ul class="chips" id="kw-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="k-voting" hidden>
+    <h2 class="question small" id="kv-question"></h2>
+    <p class="hint">وحدة بس منها صحيحة. اختاروها من جوالاتكم.</p>
+    <ul class="options tilt" id="kv-options"></ul>
+    <ul class="chips" id="kv-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="k-reveal" hidden>
+    <h2 class="question small" id="kr-question"></h2>
+    <div class="reveal">
+      <ul class="options tilt" id="kr-options"></ul>
+      <div class="board"><h3>النقاط</h3><ol id="kr-board"></ol></div>
+    </div>
+    <div class="actions"><button class="btn" data-next>الجولة الجاية</button></div>
+  </section>
+
+  <!-- برا السالفة -->
+  <section id="o-reveal" hidden>
+    <div class="grow">
+      <h2 class="headline">كل واحد يشوف كلمته بالسر</h2>
+      <p class="hint">اضغطوا مطوّل على البطاقة في جوالاتكم، ولا تخلّون أحد يشوف شاشتكم.</p>
+    </div>
+    <ul class="chips" id="or-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>يلا نبدأ الأسئلة</button></div>
+  </section>
+
+  <section id="o-questions" hidden>
+    <span class="tag" id="oq-tag"></span>
+    <div class="grow">
+      <p class="turn"><span class="asks">السؤال من</span><span class="name" id="oq-asker"></span><span class="asks">إلى</span><span class="name" id="oq-target"></span></p>
+      <p class="hint">اسأل سؤال عن الكلمة بدون ما تكشفها.</p>
+    </div>
+    <p class="hint" id="oq-progress"></p>
+    <div class="actions"><button class="btn-quiet" data-skip>السؤال التالي</button></div>
+  </section>
+
+  <section id="o-discuss" hidden>
+    <div class="grow">
+      <h2 class="headline">تناقشوا</h2>
+      <p class="hint">مين تشكّون فيه؟ عندكم لين يخلص الوقت، وبعدها التصويت.</p>
+    </div>
+    <div class="actions"><button class="btn-quiet" data-skip>يلا التصويت</button></div>
+  </section>
+
+  <section id="o-voting" hidden>
+    <div class="grow">
+      <h2 class="headline">مين برا السالفة؟</h2>
+      <p class="hint">صوّتوا من جوالاتكم. ينمسك اللي ياخذ أكثر أصوات لوحده، وبصوتين على الأقل.</p>
+    </div>
+    <ul class="chips" id="ov-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء التصويت</button></div>
+  </section>
+
+  <section id="o-guess" hidden>
+    <div class="grow">
+      <h2 class="headline" id="og-head"></h2>
+      <p class="hint" id="og-hint"></p>
+    </div>
+  </section>
+
+  <section id="o-result" hidden>
+    <div>
+      <h2 class="headline" id="ox-head"></h2>
+      <p class="hint" id="ox-sub"></p>
+    </div>
+    <div class="reveal">
+      <div class="result-main">
+        <div class="card word-card">
+          <span class="label" id="ox-cat"></span>
+          <span class="big" id="ox-word"></span>
+          <span class="label" id="ox-guess"></span>
+        </div>
+        <ul class="votes" id="ox-votes"></ul>
+      </div>
+      <div class="board"><h3>النقاط</h3><ol id="ox-board"></ol></div>
+    </div>
+    <div class="actions"><button class="btn" data-next>الجولة الجاية</button></div>
+  </section>
+
+  <!-- النهاية -->
+  <section id="final" hidden>
+    <div class="final">
+      <p class="winner-label" id="f-label">الفايز</p>
+      <h2 class="winner" id="f-winner"></h2>
+      <ol class="ranking" id="f-ranking"></ol>
+      <button class="btn" id="back">رجوع للقائمة</button>
+    </div>
+  </section>
+</main>
+
+<div class="tools">
+  <button class="btn-quiet" id="fs">ملء الشاشة</button>
+  <button class="btn-quiet" id="end" hidden>إنهاء اللعبة</button>
+</div>
+<div class="offline" id="offline" hidden>انقطع الاتصال بالسيرفر، نحاول نرجع…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const fmt = (n) => Number(n).toLocaleString('ar-SA');
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const list = (names) => names.join('، ');
+
+  function renderQuestion(node, q) {
+    node.replaceChildren();
+    const parts = String(q || '').split('___');
+    parts.forEach((part, i) => {
+      node.append(document.createTextNode(part));
+      if (i < parts.length - 1) node.append(el('span', 'blank'));
+    });
+  }
+
+  const socket = io();
+  let S = null;
+  let deadline = 0;
+
+  socket.on('connect', () => { $('#offline').hidden = true; socket.emit('host:hello'); });
+  socket.on('disconnect', () => { $('#offline').hidden = false; });
+  socket.on('state', (s) => {
+    S = s;
+    deadline = s.g && s.g.remaining ? Date.now() + s.g.remaining : 0;
+    render();
+  });
+
+  fetch('/qr').then((r) => r.json()).then(({ url, dataUrl }) => {
+    $('#qr').src = dataUrl;
+    $('#qr-url').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  }).catch(() => { $('#qr-url').textContent = 'تعذّر إنشاء الباركود'; });
+
+  $('#start').onclick = () => socket.emit('host:start');
+  $('#back').onclick = () => socket.emit('host:end');
+  $('#end').onclick = () => { if (confirm('تبي تنهي اللعبة وترجع للقائمة؟ النقاط راح تنمسح.')) socket.emit('host:end'); };
+  document.querySelectorAll('[data-skip]').forEach((b) => (b.onclick = () => socket.emit('host:action', 'skip')));
+  document.querySelectorAll('[data-next]').forEach((b) => (b.onclick = () => socket.emit('host:action', 'next')));
+  $('#fs').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  };
+
+  const nameOf = (id) => (S.players.find((p) => p.id === id) || {}).name || '؟';
+
+  function fillChips(target, done) {
+    target.replaceChildren();
+    for (const p of S.players) {
+      const isDone = done && done.includes(p.id);
+      const c = el('li', 'chip' + (isDone ? ' done' : '') + (p.connected ? '' : ' off'));
+      c.append(el('span', null, p.name));
+      if (isDone) c.append(el('span', null, '✓'));
+      if (!p.connected) c.append(el('span', null, '(طلع)'));
+      target.append(c);
+    }
+  }
+
+  function fillBoard(target, gains) {
+    target.replaceChildren();
+    for (const p of [...S.players].sort((a, b) => b.score - a.score)) {
+      const li = el('li');
+      li.append(el('span', null, p.name));
+      const right = el('span', 'pts');
+      const g = (gains && gains[p.id]) || 0;
+      if (g) right.append(el('span', 'gain', `+${fmt(g)}`));
+      right.append(el('span', 'total', fmt(p.score)));
+      li.append(right);
+      target.append(li);
+    }
+  }
+
+  function sectionId() {
+    if (S.stage === 'lobby') return 'lobby';
+    if (S.g.phase === 'final') return 'final';
+    return (S.game === 'kaddab' ? 'k-' : 'o-') + S.g.phase;
+  }
+
+  function render() {
+    document.body.dataset.game = S.stage === 'lobby' ? S.selected : S.game;
+    const id = sectionId();
+    document.querySelectorAll('main > section').forEach((sec) => (sec.hidden = sec.id !== id));
+    const playing = S.stage === 'playing';
+    $('#topbar').hidden = !playing || id === 'final';
+    $('#end').hidden = !playing || id === 'final';
+    if (playing) {
+      $('#game-title').textContent = S.title;
+      $('#round').textContent = `الجولة ${fmt(S.g.round)} من ${fmt(S.g.rounds)}`;
+      document.querySelectorAll('[data-next]').forEach((b) => (b.textContent = S.g.round >= S.g.rounds ? 'النتيجة النهائية' : 'الجولة الجاية'));
+    }
+    (renderers[id] || (() => {}))();
+    tick();
+  }
+
+  // ===== القائمة =====
+  let builtFor = null;
+  function buildLobby() {
+    const key = S.selected;
+    const gamesBox = $('#games');
+    if (!gamesBox.children.length) {
+      for (const g of S.games) {
+        const b = el('button', 'card game-card');
+        b.dataset.game = g.key;
+        b.append(
+          el('span', 'wordmark', g.title),
+          el('span', 'game-tag', g.tagline),
+          el('span', 'game-meta', `من ${fmt(g.minPlayers)} إلى ${fmt(g.maxPlayers)} لاعبين`)
+        );
+        b.onclick = () => socket.emit('host:select', g.key);
+        gamesBox.append(b);
+      }
+    }
+    if (builtFor === key) return;
+    builtFor = key;
+    const game = S.games.find((g) => g.key === key);
+    const box = $('#settings');
+    box.replaceChildren();
+    for (const s of game.settings) {
+      const row = el('div', 'setting');
+      const label = el('span', 'setting-label', s.label);
+      const seg = el('div', 'seg');
+      seg.setAttribute('role', 'radiogroup');
+      seg.setAttribute('aria-label', s.label);
+      s.options.forEach((o, i) => {
+        const b = el('button', null, o.label);
+        b.type = 'button';
+        b.setAttribute('role', 'radio');
+        b.dataset.key = s.key;
+        b.dataset.index = i;
+        b.onclick = () => socket.emit('host:setting', { game: key, key: s.key, value: o.value });
+        seg.append(b);
+      });
+      row.append(label, seg);
+      box.append(row);
+    }
+  }
+
+  const renderers = {
+    lobby() {
+      buildLobby();
+      const game = S.games.find((g) => g.key === S.selected);
+      for (const b of $('#games').children) b.setAttribute('aria-pressed', String(b.dataset.game === S.selected));
+      for (const b of $('#settings').querySelectorAll('button')) {
+        const s = game.settings.find((x) => x.key === b.dataset.key);
+        b.setAttribute('aria-checked', String(s.options[b.dataset.index].value === game.values[s.key]));
+      }
+      const chips = $('#lobby-players');
+      if (!S.players.length) {
+        chips.replaceChildren(el('li', 'chip off', 'ما دخل أحد للحين'));
+      } else fillChips(chips);
+      const n = S.players.filter((p) => p.connected).length;
+      $('#start').textContent = `ابدأ ${game.title}`;
+      $('#start').disabled = n < game.minPlayers;
+      $('#lobby-count').textContent = n < game.minPlayers
+        ? `«${game.title}» تحتاج ${fmt(game.minPlayers)} لاعبين على الأقل.`
+        : `${fmt(n)} جاهزين.`;
+    },
+
+    // ----- الكذّاب -----
+    'k-writing'() {
+      renderQuestion($('#kw-question'), S.g.question);
+      fillChips($('#kw-players'), S.g.done);
+    },
+    'k-voting'() {
+      renderQuestion($('#kv-question'), S.g.question);
+      const box = $('#kv-options');
+      box.replaceChildren(...S.g.options.map((o) => el('li', 'card', o.text)));
+      fillChips($('#kv-players'), S.g.done);
+    },
+    'k-reveal'() {
+      renderQuestion($('#kr-question'), S.g.question);
+      const box = $('#kr-options');
+      box.replaceChildren();
+      // الكذبات تنختم أول، والصح آخر شي
+      const lies = S.g.options.filter((o) => !o.truth);
+      const order = new Map(lies.map((o, i) => [o.id, i]));
+      for (const o of S.g.options) {
+        const card = el('li', 'card' + (o.truth ? ' is-truth' : ''));
+        const stamp = el('span', 'stamp' + (o.truth ? ' truth' : ''), o.truth ? 'الصح' : `كذبة ${list(o.authors.map(nameOf))}`);
+        stamp.style.setProperty('--i', o.truth ? lies.length : order.get(o.id));
+        const voters = o.voters.map(nameOf);
+        const line = o.truth
+          ? (voters.length ? `عرفوها: ${list(voters)}` : 'ما أحد عرفها')
+          : (voters.length ? `انخدع: ${list(voters)}` : 'ما انخدع أحد');
+        card.append(stamp, el('span', null, o.text), el('span', 'who', line));
+        box.append(card);
+      }
+      fillBoard($('#kr-board'), S.g.gains);
+    },
+
+    // ----- برا السالفة -----
+    'o-reveal'() {
+      fillChips($('#or-players'), S.g.done);
+    },
+    'o-questions'() {
+      const t = S.g.turn;
+      $('#oq-tag').hidden = !S.g.category;
+      $('#oq-tag').textContent = S.g.category ? `الفئة: ${S.g.category}` : '';
+      $('#oq-asker').textContent = t ? nameOf(t.asker) : '';
+      $('#oq-target').textContent = t ? nameOf(t.target) : '';
+      $('#oq-progress').textContent = t ? `سؤال ${fmt(t.index)} من ${fmt(t.total)}` : '';
+    },
+    'o-voting'() {
+      fillChips($('#ov-players'), S.g.done);
+    },
+    'o-guess'() {
+      const n = nameOf(S.g.accused);
+      $('#og-head').textContent = `مسكتوا ${n}!`;
+      $('#og-hint').textContent = `صح، ${n} برا السالفة. باقي فرصة أخيرة: لو انختارت الكلمة الصحيحة من الجوال، النقطتين لـ ${n}.`;
+    },
+    'o-result'() {
+      const g = S.g;
+      const out = nameOf(g.outsider);
+      const heads = {
+        caught: [`كشفتوا ${out}!`, 'والكلمة ما انعرفت. نقطة لكل واحد كان يعرفها.'],
+        guessed: [`كشفتوا ${out}… بس التخمين طلع صح!`, `نقطتين لـ ${out}.`],
+        escaped: [`ما أحد كشف ${out}!`, `الأصوات ما اتفقت على أحد، واللي برا السالفة كان ${out}. نقطتين لـ ${out}.`],
+        framed: [`ظلمتوا ${nameOf(g.accused)}!`, `اللي برا السالفة كان ${out}، والنقطتين لـ ${out}.`],
+      };
+      $('#ox-head').textContent = heads[g.outcome][0];
+      $('#ox-sub').textContent = heads[g.outcome][1];
+      $('#ox-cat').textContent = `الكلمة كانت (${g.category})`;
+      $('#ox-word').textContent = g.word;
+      $('#ox-guess').textContent = g.guess ? `خمّن: ${g.guess}` : '';
+      const votes = $('#ox-votes');
+      votes.replaceChildren();
+      for (const p of S.players) {
+        const li = el('li');
+        const target = g.votes[p.id];
+        li.append(el('span', null, `صوت ${p.name}: `));
+        li.append(target ? el('b', null, nameOf(target)) : el('span', null, 'ما فيه'));
+        votes.append(li);
+      }
+      fillBoard($('#ox-board'), g.gains);
+    },
+
+    final() {
+      const sorted = [...S.players].sort((a, b) => b.score - a.score);
+      const top = sorted.length ? sorted[0].score : 0;
+      const winners = sorted.filter((p) => p.score === top);
+      $('#f-label').textContent = winners.length > 1 ? 'تعادل' : 'الفايز';
+      $('#f-winner').textContent = winners.map((p) => p.name).join(' و ');
+      $('#f-ranking').replaceChildren(...sorted.map((p) => {
+        const li = el('li');
+        li.append(el('span', null, p.name), el('span', null, `${fmt(p.score)} نقطة`));
+        return li;
+      }));
+    },
+  };
+
+  function tick() {
+    if (!S) return;
+    const t = $('#timer');
+    const left = deadline ? Math.max(0, deadline - Date.now()) : 0;
+    t.classList.toggle('idle', !deadline);
+    if (!deadline) return;
+    t.textContent = fmt(Math.ceil(left / 1000));
+    t.style.setProperty('--p', S.g.duration ? left / S.g.duration : 0);
+    t.classList.toggle('low', left < 10000);
+  }
+  setInterval(tick, 200);
+</script>
+</body>
+</html>
