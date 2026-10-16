@@ -23,23 +23,30 @@ function pickWord(cat) {
   return word;
 }
 
-// كل واحد يسأل شخص مختلف في كل دورة، ومع ٣ لاعبين ودورتين: كل واحد يسأل الاثنين
+// كل دورة سلسلة وحدة: اللي جاوب هو اللي يسأل بعده، والسلسلة تلف على الكل.
+// كذا كل واحد يسأل مرة وينسأل مرة في كل دورة، بالتساوي.
+// ونحاول ما نكرر نفس الثنائي في الدورات اللي بعدها،
+// فمع ٣ لاعبين ودورتين: كل واحد يسأل الاثنين.
 function buildTurns(ids, laps) {
-  const asked = new Map(ids.map((id) => [id, new Set()]));
+  const used = new Set();
   const turns = [];
   for (let lap = 0; lap < laps; lap++) {
-    for (const asker of shuffle([...ids])) {
-      let pool = ids.filter((t) => t !== asker && !asked.get(asker).has(t));
-      if (!pool.length) {
-        asked.get(asker).clear();
-        pool = ids.filter((t) => t !== asker);
-      }
+    let best = null;
+    let bestCost = Infinity;
+    for (let tries = 0; tries < 60 && bestCost > 0; tries++) {
+      const order = shuffle([...ids]);
+      const pairs = order.map((asker, i) => ({ asker, target: order[(i + 1) % order.length] }));
+      let cost = pairs.filter((t) => used.has(t.asker + '>' + t.target)).length;
       const last = turns[turns.length - 1];
-      const noPingPong = pool.filter((t) => !(last && last.asker === t && last.target === asker));
-      if (noPingPong.length) pool = noPingPong;
-      const target = pick(pool);
-      asked.get(asker).add(target);
-      turns.push({ asker, target });
+      if (last && last.asker === pairs[0].target && last.target === pairs[0].asker) cost += 0.5;
+      if (cost < bestCost) {
+        best = pairs;
+        bestCost = cost;
+      }
+    }
+    for (const t of best) {
+      used.add(t.asker + '>' + t.target);
+      turns.push(t);
     }
   }
   return turns;
