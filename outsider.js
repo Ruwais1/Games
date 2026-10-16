@@ -4,9 +4,10 @@ const CATEGORIES = require('./words');
 const { shuffle, pick, ar, options, seconds, createClock } = require('./util');
 
 const GUESS_SECONDS = 30;
-const GUESS_OPTIONS = 8; // عدد الكلمات اللي تطلع للي برا السالفة لما ينمسك
+const GUESS_OPTIONS = 8; // عدد الكلمات اللي تطلع للي برا السالفة وقت التخمين
 const INSIDER_POINTS = 1; // لكل واحد يعرف الكلمة إذا انكشف اللي برا السالفة
-const OUTSIDER_POINTS = 2; // للي برا السالفة إذا فلت أو عرف الكلمة
+const ESCAPE_POINTS = 2; // للي برا السالفة إذا ما انكشف
+const GUESS_POINTS = 1; // نقطة زيادة للي برا السالفة إذا خمّن الكلمة صح
 const usedWords = new Map(); // الفئة -> الكلمات اللي انلعبت
 
 function pickWord(cat) {
@@ -101,9 +102,10 @@ module.exports = {
       turn: 0,
       votes: new Map(),
       accused: null,
-      outcome: null, // caught | guessed | escaped | framed
+      outcome: null, // caught | escaped | framed
       guessOptions: [],
       guess: null,
+      guessed: false,
       gains: {},
     };
     const clock = createClock(() => {
@@ -132,6 +134,7 @@ module.exports = {
       st.outcome = null;
       st.guessOptions = [];
       st.guess = null;
+      st.guessed = false;
       st.gains = {};
       setPhase('reveal');
     }
@@ -165,38 +168,37 @@ module.exports = {
       else setPhase('voting', cfg.voteTime);
     }
 
-    // ينمسك الشخص إذا جاب أكثر أصوات لوحده، وبصوتين على الأقل
+    // ينمسك الشخص إذا جاب أكثر أصوات لوحده، وبصوتين على الأقل.
+    // وبعد التصويت، اللي برا السالفة يخمّن الكلمة دايم، سواء انمسك أو لا
     function tally() {
       const counts = new Map();
       for (const target of st.votes.values()) counts.set(target, (counts.get(target) || 0) + 1);
       const max = Math.max(0, ...counts.values());
       const leaders = [...counts].filter(([, c]) => c === max).map(([id]) => id);
       st.accused = max >= 2 && leaders.length === 1 ? leaders[0] : null;
+      st.outcome = st.accused === st.outsider ? 'caught' : st.accused ? 'framed' : 'escaped';
 
-      if (st.accused && st.accused === st.outsider) {
-        const others = shuffle(st.cat.words.filter((w) => w !== st.word)).slice(0, GUESS_OPTIONS - 1);
-        st.guessOptions = shuffle([st.word, ...others]);
-        if (!live(st.outsider)) return finishGuess(null);
-        setPhase('guess', GUESS_SECONDS);
-      } else {
-        award(st.accused ? 'framed' : 'escaped');
-      }
+      const others = shuffle(st.cat.words.filter((w) => w !== st.word)).slice(0, GUESS_OPTIONS - 1);
+      st.guessOptions = shuffle([st.word, ...others]);
+      if (!live(st.outsider)) return finishGuess(null);
+      setPhase('guess', GUESS_SECONDS);
     }
 
     function finishGuess(word) {
       st.guess = word;
-      award(word === st.word ? 'guessed' : 'caught');
+      st.guessed = word === st.word;
+      award();
     }
 
-    function award(outcome) {
-      st.outcome = outcome;
+    function award() {
       const gains = {};
       for (const p of ctx.players()) gains[p.id] = 0;
-      if (outcome === 'caught') {
+      if (st.outcome === 'caught') {
         for (const p of ctx.players()) if (p.id !== st.outsider) gains[p.id] += INSIDER_POINTS;
       } else {
-        gains[st.outsider] = (gains[st.outsider] || 0) + OUTSIDER_POINTS;
+        gains[st.outsider] = (gains[st.outsider] || 0) + ESCAPE_POINTS;
       }
+      if (st.guessed) gains[st.outsider] = (gains[st.outsider] || 0) + GUESS_POINTS;
       for (const [id, g] of Object.entries(gains)) {
         const p = ctx.get(id);
         if (p) p.score += g;
@@ -239,13 +241,14 @@ module.exports = {
           done: st.phase === 'reveal' ? [...st.seen] : st.phase === 'voting' ? [...st.votes.keys()] : [],
           turn: st.phase === 'questions' && t ? { asker: t.asker, target: t.target, index: st.turn + 1, total: st.turns.length } : null,
         };
-        if (st.phase === 'guess') s.accused = st.accused;
+        // وقت التخمين ما نكشف مين انمسك، عشان تبقى المفاجأة للنتيجة
         if (st.phase === 'result') {
           Object.assign(s, {
             accused: st.accused,
             outsider: st.outsider,
             word: st.word,
             guess: st.guess,
+            guessed: st.guessed,
             outcome: st.outcome,
             votes: Object.fromEntries(st.votes),
             gains: st.gains,
