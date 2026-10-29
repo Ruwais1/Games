@@ -65,6 +65,10 @@
   .my-awards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .my-awards li { background: var(--night-2); border-radius: 10px; padding: .4em 1em; }
   .my-awards b { color: var(--accent); }
+  .cert { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 8px; }
+  .cert img { width: 100%; max-width: 360px; height: auto; border-radius: 10px; box-shadow: 5px 6px 0 rgba(0, 0, 0, .35); -webkit-touch-callout: default; }
+  .cert-actions { display: flex; gap: 10px; align-items: center; }
+  .cert-tip { font-size: .85rem; }
   .banner {
     position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--stamp); color: #fff; padding: .6em 1em; border-radius: 10px; text-align: center;
@@ -194,6 +198,14 @@
     <p class="said" id="final-score"></p>
     <p class="muted" id="pf-winner"></p>
     <ul class="my-awards" id="pf-awards"></ul>
+    <div class="cert" id="cert" hidden>
+      <img id="cert-img" alt="شهادتك">
+      <div class="cert-actions">
+        <button class="btn" id="cert-share" type="button">شارك الصورة</button>
+        <button class="btn-quiet" id="cert-save" type="button">حفظ</button>
+      </div>
+      <p class="muted cert-tip">وتقدر بعد تضغط مطوّل على الصورة وتحفظها.</p>
+    </div>
     <p class="muted">تبون تلعبون ثاني؟ ارجعوا للقائمة من الشاشة.</p>
   </section>
 
@@ -217,6 +229,7 @@
   };
   // Arabic counting: 1 نقطة وحدة, 2 نقطتين, 3-10 نقاط, 11+ نقطة
   const pts = (n) => (n === 0 ? 'صفر' : n === 1 ? 'نقطة وحدة' : n === 2 ? 'نقطتين' : n <= 10 ? `${fmt(n)} نقاط` : `${fmt(n)} نقطة`);
+  const people = (n) => (n === 1 ? 'شخص واحد' : n === 2 ? 'شخصين' : n <= 10 ? `${fmt(n)} أشخاص` : `${fmt(n)} شخص`);
   const ORDINALS = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن'];
   // Short vibration on Android phones (iPhones ignore it)
   const buzz = (pattern) => { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} };
@@ -370,6 +383,8 @@
       if (renaming) return;
       lastKey = '';
       finalBuzzed = false;
+      certMade = false;
+      $('#cert').hidden = true;
       const game = S.games.find((g) => g.key === S.selected);
       $('#hello').textContent = `أهلًا ${me.name}`;
       $('#lobby-game').textContent = game ? game.title : '';
@@ -570,8 +585,234 @@
     }));
     if (iWon && !finalBuzzed) buzz([80, 60, 80, 60, 160]);
     finalBuzzed = true;
+    if (!certMade) {
+      certMade = true;
+      makeCertificate().then((url) => {
+        certUrl = url;
+        $('#cert-img').src = url;
+        $('#cert').hidden = false;
+      }).catch(() => {});
+    }
     show('s-final');
   }
+
+  // ----- Shareable certificate, drawn on a 1080x1350 canvas -----
+  let certMade = false;
+  let certUrl = '';
+
+  function roundRect(x, l, t, w, h, r) {
+    x.beginPath();
+    x.moveTo(l + r, t);
+    x.arcTo(l + w, t, l + w, t + h, r);
+    x.arcTo(l + w, t + h, l, t + h, r);
+    x.arcTo(l, t + h, l, t, r);
+    x.arcTo(l, t, l + w, t, r);
+    x.closePath();
+  }
+
+  // Shrink the font until the text fits the width
+  function fit(x, text, size, family, maxW, weight = '') {
+    let s = size;
+    x.font = `${weight} ${s}px ${family}`.trim();
+    while (x.measureText(text).width > maxW && s > 24) {
+      s -= 4;
+      x.font = `${weight} ${s}px ${family}`.trim();
+    }
+  }
+
+  function wrap(x, text, maxW, maxLines) {
+    const lines = [];
+    let line = '';
+    for (const w of text.split(' ')) {
+      const test = line ? `${line} ${w}` : w;
+      if (x.measureText(test).width > maxW && line) {
+        lines.push(line);
+        line = w;
+      } else line = test;
+    }
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+      lines.length = maxLines;
+      lines[maxLines - 1] += '…';
+    }
+    return lines;
+  }
+
+  async function makeCertificate() {
+    const DISPLAY = 'Lalezar, Tahoma, sans-serif';
+    const BODY = '"IBM Plex Sans Arabic", Tahoma, sans-serif';
+    // Canvas only uses web fonts that are already loaded
+    try {
+      await Promise.all([
+        document.fonts.load('80px Lalezar'),
+        document.fonts.load('40px "IBM Plex Sans Arabic"'),
+        document.fonts.load('600 40px "IBM Plex Sans Arabic"'),
+      ]);
+    } catch (e) {}
+
+    const g = S.g;
+    const me = S.me;
+    const sorted = [...S.players].sort((a, b) => b.score - a.score);
+    const top = sorted.length ? sorted[0].score : 0;
+    const tie = sorted.filter((p) => p.score === top).length > 1;
+    const iWon = me.score === top;
+    const rank = 1 + sorted.filter((p) => p.score > me.score).length;
+    const css = getComputedStyle(document.body);
+    const accent = css.getPropertyValue('--accent').trim() || '#F2B33D';
+    const seal = S.game === 'kaddab' ? '#C81E35' : css.getPropertyValue('--accent-ink').trim() || '#13705A';
+    const ink = '#2A1E12';
+    const soft = '#6B5A43';
+
+    const W = 1080;
+    const H = 1350;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const x = c.getContext('2d');
+
+    // Night background with confetti
+    x.fillStyle = '#1B2A4E';
+    x.fillRect(0, 0, W, H);
+    const colors = [accent, '#F6E7C8', '#C81E35', '#AEBCDB'];
+    for (let i = 0; i < 70; i++) {
+      x.save();
+      x.translate(Math.random() * W, Math.random() * H);
+      x.rotate(Math.random() * Math.PI);
+      x.fillStyle = colors[i % colors.length];
+      x.fillRect(-7, -11, 14, 22);
+      x.restore();
+    }
+
+    // Paper card, slightly tilted, with a double border
+    x.save();
+    x.translate(W / 2, H / 2);
+    x.rotate(-0.012);
+    x.translate(-W / 2, -H / 2);
+    x.fillStyle = 'rgba(0, 0, 0, .35)';
+    roundRect(x, 82, 132, W - 152, H - 252, 26);
+    x.fill();
+    x.fillStyle = '#F6E7C8';
+    roundRect(x, 70, 120, W - 140, H - 240, 26);
+    x.fill();
+    x.strokeStyle = seal;
+    x.lineWidth = 6;
+    roundRect(x, 98, 148, W - 196, H - 296, 16);
+    x.stroke();
+    x.lineWidth = 2;
+    roundRect(x, 112, 162, W - 224, H - 324, 12);
+    x.stroke();
+
+    x.direction = 'rtl';
+    x.textAlign = 'center';
+    const cx = W / 2;
+    const maxW = W - 300;
+
+    x.fillStyle = soft;
+    x.font = `40px ${BODY}`;
+    x.fillText(`ألعاب السهرة · ${S.title}`, cx, 245);
+
+    const title = iWon ? `شهادة ${g.winnerTitle}${tie ? ' (تعادل)' : ''}` : `المركز ${ORDINALS[rank - 1] || fmt(rank)}`;
+    x.fillStyle = seal;
+    fit(x, title, 104, DISPLAY, maxW);
+    x.fillText(title, cx, 365);
+
+    x.fillStyle = ink;
+    fit(x, me.name, 170, DISPLAY, maxW);
+    x.fillText(me.name, cx, 535);
+
+    x.font = `600 54px ${BODY}`;
+    x.fillText(`بمجموع ${pts(me.score)}`, cx, 670);
+
+    let y = 730;
+    if (!iWon) {
+      const names = sorted.filter((p) => p.score === top).map((p) => p.name).join(' و ');
+      x.fillStyle = soft;
+      fit(x, `${g.winnerTitle}: ${names}`, 44, BODY, maxW);
+      x.fillText(`${g.winnerTitle}: ${names}`, cx, y + 20);
+      y += 70;
+    }
+    const lie = me.g && me.g.bestLie;
+    if (lie) {
+      x.font = `64px ${DISPLAY}`;
+      const lines = wrap(x, `«${lie.text}»`, W - 420, 2);
+      const boxH = 150 + lines.length * 72 + 30;
+      x.fillStyle = 'rgba(42, 30, 18, .07)';
+      roundRect(x, 170, y, W - 340, boxH, 18);
+      x.fill();
+      x.fillStyle = soft;
+      x.font = `38px ${BODY}`;
+      x.fillText('أقوى كذبة لك', cx, y + 60);
+      x.fillStyle = seal;
+      x.font = `64px ${DISPLAY}`;
+      lines.forEach((ln, i) => x.fillText(ln, cx, y + 140 + i * 72));
+      x.fillStyle = soft;
+      x.font = `36px ${BODY}`;
+      x.fillText(`صدّقها ${people(lie.fooled)}`, cx, y + 140 + lines.length * 72 + 8);
+      y += boxH + 30;
+    }
+
+    const myAwards = (g.awards || []).filter((a) => a.ids.includes(me.id));
+    if (myAwards.length) {
+      x.fillStyle = ink;
+      x.font = `600 44px ${BODY}`;
+      x.fillText(myAwards.map((a) => `🏅 ${a.title}`).join('    '), cx, y + 40);
+    }
+
+    // Date, Hijri and Gregorian
+    const d = new Date();
+    const dateIn = (loc) => {
+      try { return new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'long', year: 'numeric' }).format(d); } catch (e) { return ''; }
+    };
+    x.fillStyle = soft;
+    x.font = `34px ${BODY}`;
+    x.textAlign = 'right';
+    x.fillText(dateIn('ar-SA-u-ca-islamic-umalqura'), W - 150, H - 230);
+    x.fillText(dateIn('ar-SA-u-ca-gregory'), W - 150, H - 182);
+
+    // The stamp
+    x.save();
+    x.translate(275, H - 205);
+    x.rotate(-0.22);
+    x.strokeStyle = seal;
+    x.fillStyle = seal;
+    x.lineWidth = 7;
+    roundRect(x, -135, -62, 270, 124, 16);
+    x.stroke();
+    x.lineWidth = 2;
+    roundRect(x, -122, -49, 244, 98, 10);
+    x.stroke();
+    x.textAlign = 'center';
+    x.font = `66px ${DISPLAY}`;
+    x.fillText('معتمد', 0, 22);
+    x.restore();
+
+    x.restore();
+    return c.toDataURL('image/png');
+  }
+
+  function saveCert() {
+    const a = document.createElement('a');
+    a.href = certUrl;
+    a.download = 'sahra-certificate.png';
+    document.body.append(a);
+    a.click();
+    a.remove();
+  }
+
+  $('#cert-save').onclick = saveCert;
+  $('#cert-share').onclick = async () => {
+    try {
+      const blob = await (await fetch(certUrl)).blob();
+      const file = new File([blob], 'sahra-certificate.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'ألعاب السهرة' });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    saveCert();
+  };
 
   function tick() {
     const bar = $('#timebar');

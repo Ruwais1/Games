@@ -126,7 +126,19 @@
   .winner { margin: .2em 0 0; font-family: var(--display); font-weight: 400; color: var(--accent); font-size: clamp(4.5rem, 12vw, 11rem); line-height: 1.05; animation: rise .6s ease-out .7s both; }
   .winner-score { margin: .3em 0 0; font-size: clamp(1.2rem, 2vw, 2rem); animation: rise .6s ease-out .9s both; }
   @keyframes rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  .final-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: clamp(16px, 2vw, 30px); }
   .podium { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(16px, 2vw, 30px); animation: rise .6s ease-out 1.2s both; }
+  .best-lie { max-width: min(980px, 100%); padding: 1.1em 1.8em .9em; transform: rotate(-1deg); animation: rise .6s ease-out 1s both; }
+  .best-lie .bl-label {
+    position: absolute; top: -.85em; inset-inline-start: 1em;
+    font-family: var(--display); font-size: clamp(1.05rem, 1.5vw, 1.4rem); line-height: 1.3;
+    color: var(--stamp); background: var(--paper); border: 3px solid currentColor; border-radius: 8px;
+    padding: .1em .6em 0; transform: rotate(-4deg);
+  }
+  .best-lie .bl-q { margin: .2em 0 .15em; font-family: var(--display); font-size: clamp(1.5rem, 2.6vw, 2.5rem); line-height: 1.45; text-wrap: balance; }
+  .best-lie .bl-q .lie { color: var(--stamp); }
+  .best-lie .bl-by { margin: 0; color: var(--ink-soft); font-size: clamp(1rem, 1.4vw, 1.3rem); }
+  .final.has-lie .winner { font-size: clamp(3.6rem, 9vw, 8.5rem); }
   .podium .card { min-width: 190px; padding: .6em 1.3em .7em; display: flex; flex-direction: column; align-items: center; }
   .podium .medal { font-size: 1.9rem; line-height: 1.2; }
   .podium .pname { font-family: var(--display); font-size: clamp(1.5rem, 2.4vw, 2.3rem); line-height: 1.3; }
@@ -282,8 +294,15 @@
         <h2 class="winner" id="f-winner"></h2>
         <p class="winner-score" id="f-score"></p>
       </div>
-      <ol class="podium tilt" id="f-podium"></ol>
-      <ul class="awards" id="f-awards"></ul>
+      <div class="card best-lie" id="f-bestlie" hidden>
+        <span class="bl-label">أقوى كذبة في السهرة</span>
+        <p class="bl-q" id="f-bl-q"></p>
+        <p class="bl-by" id="f-bl-by"></p>
+      </div>
+      <div class="final-row">
+        <ol class="podium tilt" id="f-podium"></ol>
+        <ul class="awards" id="f-awards"></ul>
+      </div>
       <button class="btn" id="back">رجوع للقائمة</button>
     </div>
     <div class="confetti" id="confetti" aria-hidden="true"></div>
@@ -311,6 +330,7 @@
   // Arabic counting: 1 نقطة وحدة, 2 نقطتين, 3-10 نقاط, 11+ نقطة
   const pts = (n) => (n === 0 ? 'صفر' : n === 1 ? 'نقطة وحدة' : n === 2 ? 'نقطتين' : n <= 10 ? `${fmt(n)} نقاط` : `${fmt(n)} نقطة`);
   const times = (n) => (n === 1 ? 'مرة وحدة' : n === 2 ? 'مرتين' : n <= 10 ? `${fmt(n)} مرات` : `${fmt(n)} مرة`);
+  const people = (n) => (n === 1 ? 'شخص واحد' : n === 2 ? 'شخصين' : n <= 10 ? `${fmt(n)} أشخاص` : `${fmt(n)} شخص`);
   const ORDINALS = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن'];
 
   // Small synthesized sound effects, no audio files needed
@@ -641,6 +661,20 @@
       $('#f-title').textContent = winners.length > 1 ? `تعادل على لقب ${g.winnerTitle}` : g.winnerTitle;
       $('#f-winner').textContent = winners.map((p) => p.name).join(' و ');
       $('#f-score').textContent = pts(top);
+      // The lie that fooled the most people tonight, written into its question's blank
+      const bl = g.bestLie;
+      $('#f-bestlie').hidden = !bl;
+      document.querySelector('#final .final').classList.toggle('has-lie', !!bl);
+      if (bl) {
+        const q = $('#f-bl-q');
+        q.replaceChildren();
+        const parts = bl.question.split('___');
+        parts.forEach((part, i) => {
+          q.append(document.createTextNode(part));
+          if (i < parts.length - 1) q.append(el('span', 'lie', `«${bl.text}»`));
+        });
+        $('#f-bl-by').textContent = `كذبة ${nameOf(bl.author)}، وصدّقها ${people(bl.fooled)}`;
+      }
       // Everyone else, as cards with their place
       $('#f-podium').replaceChildren(...sorted.filter((p) => p.score !== top).map((p) => {
         const rank = 1 + sorted.filter((x) => x.score > p.score).length;
