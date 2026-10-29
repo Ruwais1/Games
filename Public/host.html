@@ -138,6 +138,8 @@
   }
   .best-lie .bl-q { margin: .2em 0 .15em; font-family: var(--display); font-size: clamp(1.5rem, 2.6vw, 2.5rem); line-height: 1.45; text-wrap: balance; }
   .best-lie .bl-q .lie { color: var(--stamp); }
+  .best-lie .bl-question { display: block; font-family: var(--body); font-size: .62em; color: var(--ink-soft); }
+  .best-lie .bl-answer { display: block; font-size: 1.25em; }
   .best-lie .bl-by { margin: 0; color: var(--ink-soft); font-size: clamp(1rem, 1.4vw, 1.3rem); }
   .final.has-lie .winner { font-size: clamp(3.6rem, 9vw, 8.5rem); }
   .podium .card { min-width: 190px; padding: .6em 1.3em .7em; display: flex; flex-direction: column; align-items: center; }
@@ -882,10 +884,16 @@
         const q = $('#f-bl-q');
         q.replaceChildren();
         const parts = bl.question.split('___');
-        parts.forEach((part, i) => {
-          q.append(document.createTextNode(part));
-          if (i < parts.length - 1) q.append(el('span', 'lie', `«${bl.text}»`));
-        });
+        if (parts.length > 1) {
+          // Old fill-in-the-blank questions: write the lie into the blank
+          parts.forEach((part, i) => {
+            q.append(document.createTextNode(part));
+            if (i < parts.length - 1) q.append(el('span', 'lie', `«${bl.text}»`));
+          });
+        } else {
+          // Direct questions: the question, then the lie as its answer
+          q.append(el('span', 'bl-question', bl.question), el('span', 'lie bl-answer', `«${bl.text}»`));
+        }
         $('#f-bl-by').textContent = `كذبة ${nameOf(bl.author)}، وصدّقها ${people(bl.fooled)}`;
       }
       // Everyone else, as cards with their place
