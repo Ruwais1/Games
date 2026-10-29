@@ -1,12 +1,25 @@
 'use strict';
-// لعبة الكذّاب
+// Al-Kaddab: write a convincing lie, then spot the truth among everyone's lies
 const QUESTIONS = require('./questions');
 const { normalize, shuffle, cleanText, ar, options, seconds, createClock } = require('./util');
 
-const TRUTH_POINTS = 2; // لمن يختار الصح
-const FOOL_POINTS = 1; // لصاحب الكذبة عن كل شخص انخدع فيها
+const TRUTH_POINTS = 2; // for picking the truth
+const FOOL_POINTS = 1; // for the liar, per player fooled
 const MAX_LIE = 40;
-const used = new Set(); // الأسئلة اللي انلعبت، عشان ما تتكرر
+const used = new Set(); // questions already played, so they don't repeat
+
+// An award goes to the player(s) with the highest non-zero value of one stat
+function awards(stats, defs, exists) {
+  return defs
+    .map((d) => {
+      const rows = [...stats].filter(([id]) => exists(id));
+      const best = Math.max(0, ...rows.map(([, s]) => s[d.key] || 0));
+      const ids = best ? rows.filter(([, s]) => s[d.key] === best).map(([id]) => id) : [];
+      return { title: d.title, label: d.label, value: best, ids, total: rows.length };
+    })
+    // Skip an award shared by more than half the players: it means nothing
+    .filter((a) => a.ids.length && a.ids.length <= Math.max(1, Math.floor(a.total / 2)));
+}
 
 function pickQuestion() {
   let pool = QUESTIONS.map((_, i) => i).filter((i) => !used.has(i));
@@ -24,6 +37,7 @@ module.exports = {
   title: 'الكذّاب',
   tagline: 'اكتب كذبة تمشي عليهم، واكشف الصح من بين كذباتهم.',
   minPlayers: 2,
+  winnerTitle: 'أكبر كذّاب',
   settings: [
     { key: 'rounds', label: 'عدد الجولات', default: 5, options: options([3, 5, 7, 10], ar) },
     { key: 'writeTime', label: 'وقت كتابة الكذبة', default: 60, options: options([30, 45, 60, 90], seconds) },
@@ -32,6 +46,12 @@ module.exports = {
 
   create(ctx, cfg) {
     const st = { phase: 'writing', round: 0, question: null, lies: new Map(), options: [], votes: new Map(), gains: {} };
+    // Per-player stats for the end-of-game awards
+    const stats = new Map();
+    const stat = (id) => {
+      if (!stats.has(id)) stats.set(id, { truths: 0, fooled: 0 });
+      return stats.get(id);
+    };
     const clock = createClock(() => {
       if (st.phase === 'writing') startVoting();
       else if (st.phase === 'voting') reveal();
@@ -67,8 +87,13 @@ module.exports = {
         const o = st.options.find((x) => x.id === oid);
         if (!o) continue;
         o.voters.push(pid);
-        if (o.truth) gains[pid] = (gains[pid] || 0) + TRUTH_POINTS;
-        else for (const a of o.authors) if (a !== pid) gains[a] = (gains[a] || 0) + FOOL_POINTS;
+        if (o.truth) {
+          gains[pid] = (gains[pid] || 0) + TRUTH_POINTS;
+          stat(pid).truths++;
+        } else {
+          stat(pid).fooled++;
+          for (const a of o.authors) if (a !== pid) gains[a] = (gains[a] || 0) + FOOL_POINTS;
+        }
       }
       for (const [pid, g] of Object.entries(gains)) {
         const p = ctx.get(pid);
@@ -83,7 +108,7 @@ module.exports = {
       return [st.question.a, ...(st.question.alt || [])].some((x) => normalize(x) === n);
     }
 
-    // إذا الكل خلّص قبل الوقت، ننتقل مباشرة. ترجع true إذا انتقلت المرحلة.
+    // Move on early once everyone is done. Returns true if the phase changed.
     function checkProgress() {
       const active = ctx.connected();
       if (!active.length) return false;
@@ -116,11 +141,18 @@ module.exports = {
           question: st.question ? st.question.q : null,
           done: st.phase === 'writing' ? [...st.lies.keys()] : st.phase === 'voting' ? [...st.votes.keys()] : [],
         };
-        // وقت التصويت: النصوص بس، بدون مين كتبها ولا وين الصح
+        // While voting: texts only, never the authors or which one is true
         if (st.phase === 'voting') s.options = st.options.map((o) => ({ id: o.id, text: o.text }));
         if (st.phase === 'reveal') {
           s.options = st.options.map((o) => ({ id: o.id, text: o.text, truth: o.truth, authors: o.authors, voters: o.voters }));
           s.gains = st.gains;
+        }
+        if (st.phase === 'final') {
+          s.winnerTitle = module.exports.winnerTitle;
+          s.awards = awards(stats, [
+            { key: 'truths', title: 'كاشف الكذب', label: 'مرات اختيار الصح' },
+            { key: 'fooled', title: 'أطيب قلب', label: 'مرات تصديق الكذب' },
+          ], (id) => !!ctx.get(id));
         }
         return s;
       },
