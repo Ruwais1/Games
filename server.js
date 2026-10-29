@@ -17,6 +17,8 @@ const GAMES = {
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
 const MAX_NAME = 14;
+// Test players that play on their own, for trying the games without people
+const BOT_NAMES = ['بوت سعد', 'بوت نورة', 'بوت فيصل', 'بوت ريم', 'بوت مشاري', 'بوت لولو', 'بوت عبود', 'بوت دانة'];
 const PUBLIC = path.join(__dirname, 'Public');
 
 const app = express();
@@ -83,7 +85,7 @@ function snapshot() {
     stage: session.stage,
     selected: session.selected,
     maxName: MAX_NAME,
-    players: ctx.players().map((p) => ({ id: p.id, name: p.name, score: p.score, connected: p.connected })),
+    players: ctx.players().map((p) => ({ id: p.id, name: p.name, score: p.score, connected: p.connected, bot: !!p.bot })),
   };
   if (session.stage === 'lobby') {
     s.games = Object.values(GAMES).map((g) => ({
@@ -103,6 +105,32 @@ function snapshot() {
   return s;
 }
 
+// Each bot asks the game what to do next; a move runs once, after a human-like delay
+function driveBots() {
+  if (!game || !game.botMove) return;
+  for (const p of session.players.values()) {
+    if (!p.bot) continue;
+    const plan = game.botMove(p);
+    if (!plan || p.botKey === plan.key) continue;
+    p.botKey = plan.key;
+    const current = game;
+    setTimeout(() => {
+      if (game !== current || !session.players.has(p.id)) return;
+      const again = game.botMove(p);
+      if (again && again.key === plan.key) game.action(p, again.data, () => {});
+    }, plan.delay);
+  }
+}
+
+function addBot() {
+  if (session.players.size >= MAX_PLAYERS) return;
+  const taken = new Set(ctx.players().map((p) => p.name));
+  const name = BOT_NAMES.find((n) => !taken.has(n));
+  if (!name) return;
+  const id = 'bot-' + crypto.randomBytes(4).toString('hex');
+  session.players.set(id, { id, name, score: 0, connected: true, socketId: null, bot: true });
+}
+
 function broadcast() {
   const s = snapshot();
   io.to('hosts').emit('state', s);
@@ -111,13 +139,17 @@ function broadcast() {
     const me = { id: p.id, name: p.name, score: p.score, g: game ? game.meView(p) : null };
     io.to(p.socketId).emit('state', { ...s, me });
   }
+  driveBots();
 }
 
 function startGame() {
   const def = GAMES[session.selected];
   for (const [id, p] of session.players) if (!p.connected) session.players.delete(id);
   for (const [t, id] of tokens) if (!session.players.has(id)) tokens.delete(t);
-  for (const p of session.players.values()) p.score = 0;
+  for (const p of session.players.values()) {
+    p.score = 0;
+    p.botKey = null;
+  }
   game = def.create(ctx, { ...session.settings[def.key] });
   session.stage = 'playing';
   game.start();
@@ -154,6 +186,18 @@ io.on('connection', (socket) => {
     const setting = def && def.settings.find((s) => s.key === data.key);
     if (!setting || !setting.options.some((o) => o.value === data.value)) return;
     session.settings[def.key][setting.key] = data.value;
+    broadcast();
+  });
+
+  socket.on('host:addBot', () => {
+    if (!isHost() || session.stage !== 'lobby') return;
+    addBot();
+    broadcast();
+  });
+
+  socket.on('host:clearBots', () => {
+    if (!isHost() || session.stage !== 'lobby') return;
+    for (const [id, p] of session.players) if (p.bot) session.players.delete(id);
     broadcast();
   });
 
