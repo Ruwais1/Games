@@ -12,6 +12,7 @@ const { normalize, cleanText } = require('./util');
 const GAMES = {
   kaddab: require('./kaddab'),
   outsider: require('./outsider'),
+  detective: require('./detective'),
 };
 
 const PORT = process.env.PORT || 3000;
