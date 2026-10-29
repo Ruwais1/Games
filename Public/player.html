@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2A4E">
+<title>ألعاب السهرة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<style>
+  main {
+    max-width: 520px; min-height: 100svh; margin: 0 auto;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--mist); min-height: 2rem; }
+  .bar .wordmark { font-size: 1.6rem; }
+  .timebar { height: 6px; background: var(--night-2); border-radius: 3px; overflow: hidden; }
+  .timebar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+  .timebar.low i { background: var(--stamp); }
+
+  main > section { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+  .center { justify-content: center; text-align: center; align-items: center; }
+  .big { font-size: clamp(3.6rem, 19vw, 6rem); }
+  h2.q { font-family: var(--display); font-weight: 400; font-size: 1.75rem; line-height: 1.5; margin: 0; }
+  p { margin: 0; }
+  .muted { color: var(--mist); }
+
+  form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+  input[type=text] {
+    font: inherit; font-size: 1.25rem; width: 100%;
+    padding: .75em 1em; border-radius: 12px;
+    border: 3px solid var(--paper-2); background: var(--paper); color: var(--ink);
+  }
+  input[type=text]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .err { color: #FF9AA5; min-height: 1.6em; }
+  .counter { color: var(--mist); font-size: .9rem; text-align: start; }
+
+  .opts { display: flex; flex-direction: column; gap: 16px; padding: 4px 4px 0; }
+  .opts.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .opt { border: 0; text-align: center; font-weight: 600; font-size: 1.25rem; line-height: 1.4; padding: .9em 1em; }
+  .opt:active { transform: scale(.98); }
+
+  .said { font-size: 1.3rem; font-weight: 600; }
+  .score-big { font-family: var(--display); font-size: 6rem; color: var(--accent); line-height: 1; }
+  .score-big.zero { color: var(--mist); }
+  .status { font-family: var(--display); font-size: 2rem; line-height: 1.45; }
+  .status b { color: var(--accent); font-weight: 400; }
+  .linkish { background: none; border: 0; color: var(--mist); text-decoration: underline; padding: .4em; }
+  .game-name { font-family: var(--display); font-size: 2.2rem; color: var(--accent); }
+  .secret-wrap { margin-top: auto; }
+  .secret-wrap .muted { text-align: center; font-size: .9rem; margin-bottom: 8px; }
+  .final-stamp {
+    --seal: var(--stamp);
+    font-family: var(--display); font-size: 1.7rem; line-height: 1.3;
+    color: var(--seal); background: var(--paper); border: 3px solid currentColor; border-radius: 10px;
+    padding: .1em .7em 0; transform: rotate(-6deg); box-shadow: 4px 5px 0 rgba(0, 0, 0, .35);
+    animation: seal .5s cubic-bezier(.2, 1.5, .4, 1) .15s both;
+  }
+  [data-game="outsider"] .final-stamp { --seal: var(--accent-ink); }
+  @keyframes seal { from { opacity: 0; transform: rotate(-6deg) scale(2.4); } to { opacity: 1; transform: rotate(-6deg) scale(1); } }
+  .rank-big { font-family: var(--display); font-size: 4.2rem; line-height: 1.2; color: var(--accent); }
+  .my-awards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .my-awards li { background: var(--night-2); border-radius: 10px; padding: .4em 1em; }
+  .my-awards b { color: var(--accent); }
+  .banner {
+    position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--stamp); color: #fff; padding: .6em 1em; border-radius: 10px; text-align: center;
+  }
+</style>
+</head>
+<body data-game="kaddab">
+<main>
+  <div class="bar" id="bar" hidden><span class="wordmark" id="bar-title">ألعاب السهرة</span><span id="me-line"></span></div>
+  <div class="timebar" id="timebar" hidden><i></i></div>
+
+  <!-- Join -->
+  <section id="s-join" class="center">
+    <h1 class="wordmark big">ألعاب السهرة</h1>
+    <p class="muted">اكتب اسمك وادخل.</p>
+    <form id="join-form">
+      <input type="text" id="name" maxlength="14" autocomplete="nickname" placeholder="اسمك" aria-label="اسمك">
+      <button class="btn" type="submit">ادخل</button>
+    </form>
+    <p class="err" id="join-err" role="alert"></p>
+    <button class="btn-quiet" id="retry" hidden>حاول مرة ثانية</button>
+  </section>
+
+  <!-- Lobby -->
+  <section id="s-lobby" class="center" hidden>
+    <h2 class="q" id="hello"></h2>
+    <p class="muted">اللعبة المختارة:</p>
+    <p class="game-name" id="lobby-game"></p>
+    <p class="muted">انتظر لين يبدؤونها من الشاشة.</p>
+    <p class="muted" id="lobby-count"></p>
+    <button class="linkish" id="rename">غيّر اسمي</button>
+  </section>
+
+  <!-- Al-Kaddab -->
+  <section id="k-write" hidden>
+    <h2 class="q" id="kw-question"></h2>
+    <form id="lie-form">
+      <input type="text" id="lie" autocomplete="off" enterkeyhint="send" placeholder="كذبتك هنا" aria-label="كذبتك">
+      <span class="counter" id="lie-count"></span>
+      <button class="btn" type="submit" id="lie-send">أرسل الكذبة</button>
+    </form>
+    <p class="err" id="lie-err" role="alert"></p>
+  </section>
+
+  <section id="k-written" class="center" hidden>
+    <p class="muted">كذبتك:</p>
+    <p class="said" id="my-lie"></p>
+    <p class="muted">انتظر الباقين يكتبون.</p>
+  </section>
+
+  <section id="k-vote" hidden>
+    <p class="muted" id="kv-question"></p>
+    <h2 class="q">وين الصح؟</h2>
+    <div class="opts tilt" id="kv-opts"></div>
+    <p class="err" id="kv-err" role="alert"></p>
+  </section>
+
+  <section id="k-voted" class="center" hidden>
+    <p class="muted">اخترت:</p>
+    <p class="said" id="kv-mine"></p>
+    <p class="muted">انتظر الباقين.</p>
+  </section>
+
+  <section id="k-reveal" class="center" hidden>
+    <p class="score-big" id="kr-gain" dir="ltr"></p>
+    <p class="said" id="kr-verdict"></p>
+    <p id="kr-truth"></p>
+    <p class="muted" id="kr-total"></p>
+  </section>
+
+  <!-- Bara Al-Salfa -->
+  <section id="o-reveal" hidden>
+    <h2 class="q">كلمتك السرية</h2>
+    <p class="muted">اضغط مطوّل على البطاقة عشان تشوفها، وغطّ الشاشة عن اللي جنبك.</p>
+    <div class="card secret" id="o-card-big" tabindex="0" aria-label="اضغط مطوّل لكشف الكلمة"></div>
+    <button class="btn" id="o-seen" disabled>شفتها</button>
+    <p class="muted center" id="o-seen-wait" hidden>تمام. انتظر الباقين.</p>
+  </section>
+
+  <section id="o-questions" class="center" hidden>
+    <p class="status" id="oq-status"></p>
+    <p class="muted" id="oq-hint"></p>
+    <button class="btn" id="oq-next" hidden></button>
+  </section>
+
+  <section id="o-discuss" class="center" hidden>
+    <p class="status">تناقشوا: مين برا السالفة؟</p>
+    <p class="muted">التصويت بعد ما يخلص الوقت.</p>
+  </section>
+
+  <section id="o-vote" hidden>
+    <h2 class="q">مين برا السالفة؟</h2>
+    <div class="opts tilt" id="ov-opts"></div>
+    <p class="err" id="ov-err" role="alert"></p>
+  </section>
+
+  <section id="o-voted" class="center" hidden>
+    <p class="muted">اخترت:</p>
+    <p class="said" id="ov-mine"></p>
+    <p class="muted">انتظر الباقين.</p>
+  </section>
+
+  <section id="o-guess" hidden>
+    <h2 class="q">وش الكلمة؟</h2>
+    <p class="muted">التصويت خلص. خمّن الكلمة، ولو طلعت صح تاخذ نقطة زيادة.</p>
+    <div class="opts grid tilt" id="og-opts"></div>
+    <p class="err" id="og-err" role="alert"></p>
+  </section>
+
+  <section id="o-guess-wait" class="center" hidden>
+    <p class="status">اللي برا السالفة يخمّن الكلمة الحين</p>
+    <p class="muted">النتيجة بعد التخمين…</p>
+  </section>
+
+  <section id="o-result" class="center" hidden>
+    <p class="score-big" id="ox-gain" dir="ltr"></p>
+    <p class="said" id="ox-verdict"></p>
+    <p id="ox-word"></p>
+    <p class="muted" id="ox-total"></p>
+  </section>
+
+  <!-- End of game -->
+  <section id="s-final" class="center" hidden>
+    <span class="final-stamp" id="pf-title" hidden></span>
+    <p class="muted" id="rank-label"></p>
+    <p class="rank-big" id="rank"></p>
+    <p class="said" id="final-score"></p>
+    <p class="muted" id="pf-winner"></p>
+    <ul class="my-awards" id="pf-awards"></ul>
+    <p class="muted">تبون تلعبون ثاني؟ ارجعوا للقائمة من الشاشة.</p>
+  </section>
+
+  <!-- Small secret card: peek at your word again during questions and voting -->
+  <div class="secret-wrap" id="o-small-wrap" hidden>
+    <p class="muted">نسيت كلمتك؟</p>
+    <div class="card secret small" id="o-card-small" tabindex="0" aria-label="اضغط مطوّل لكشف الكلمة"></div>
+  </div>
+</main>
+<div class="banner" id="banner" hidden>انقطع الاتصال، نحاول نرجعك…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const fmt = (n) => Number(n).toLocaleString('ar-SA');
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  // Arabic counting: 1 نقطة وحدة, 2 نقطتين, 3-10 نقاط, 11+ نقطة
+  const pts = (n) => (n === 0 ? 'صفر' : n === 1 ? 'نقطة وحدة' : n === 2 ? 'نقطتين' : n <= 10 ? `${fmt(n)} نقاط` : `${fmt(n)} نقطة`);
+  const ORDINALS = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن'];
+  // Short vibration on Android phones (iPhones ignore it)
+  const buzz = (pattern) => { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} };
+  const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+
+  function renderQuestion(node, q) {
+    node.replaceChildren();
+    const parts = String(q || '').split('___');
+    parts.forEach((part, i) => {
+      node.append(document.createTextNode(part));
+      if (i < parts.length - 1) node.append(el('span', 'blank'));
+    });
+  }
+
+  // Stable per-phone token: brings you back to your seat after a lock screen or refresh
+  let token = load('kd_token');
+  if (!token) {
+    token = (self.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+    store('kd_token', token);
+  }
+
+  const socket = io();
+  let S = null;
+  let deadline = 0;
+  let joined = false;
+  let renaming = false;
+  let lastKey = '';
+  let heldOnce = false;
+  let lastBuzzTurn = null;
+  let finalBuzzed = false;
+
+  const screens = [...document.querySelectorAll('main > section')].map((s) => s.id);
+  function show(id) {
+    for (const s of screens) $('#' + s).hidden = s !== id;
+    $('#bar').hidden = id === 's-join';
+    const small = S && S.stage === 'playing' && S.game === 'outsider' && ['o-questions', 'o-discuss', 'o-vote', 'o-voted'].includes(id);
+    $('#o-small-wrap').hidden = !small;
+  }
+
+  async function keepAwake() {
+    try {
+      if ('wakeLock' in navigator && document.visibilityState === 'visible') await navigator.wakeLock.request('screen');
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (joined && document.visibilityState === 'visible') keepAwake(); });
+
+  // ----- Join -----
+  function showJoin(error, canRetry) {
+    joined = false;
+    show('s-join');
+    $('#join-err').textContent = error || '';
+    $('#retry').hidden = !canRetry;
+    $('#join-form').hidden = !!canRetry;
+    if (!$('#name').value) $('#name').value = load('kd_name') || '';
+  }
+
+  function join(name) {
+    socket.emit('player:join', { token, name }, (res) => {
+      if (res && res.ok) {
+        joined = true;
+        renaming = false;
+        store('kd_name', res.name);
+        keepAwake();
+      } else {
+        showJoin(res && res.error, res && res.retry);
+      }
+    });
+  }
+
+  $('#join-form').onsubmit = (e) => {
+    e.preventDefault();
+    const name = $('#name').value.trim();
+    if (!name) { $('#join-err').textContent = 'اكتب اسمك.'; return; }
+    join(name);
+  };
+  $('#retry').onclick = () => join(load('kd_name') || '');
+  $('#rename').onclick = () => { renaming = true; $('#name').value = S?.me?.name || ''; showJoin(); };
+
+  const act = (data, errEl, done) => socket.emit('player:action', data, (res) => {
+    if (errEl) errEl.textContent = res && res.error ? res.error : '';
+    if (done) done(res || {});
+  });
+
+  // ----- Al-Kaddab -----
+  $('#lie').addEventListener('input', () => {
+    $('#lie-count').textContent = `${fmt($('#lie').value.length)} / ${fmt(S?.g?.maxLie || 40)}`;
+  });
+  $('#lie-form').onsubmit = (e) => {
+    e.preventDefault();
+    const text = $('#lie').value.trim();
+    if (!text) { $('#lie-err').textContent = 'اكتب كذبتك أول.'; return; }
+    $('#lie-send').disabled = true;
+    act({ type: 'lie', text }, $('#lie-err'), () => { $('#lie-send').disabled = false; });
+  };
+
+  // ----- Bara Al-Salfa: the secret card -----
+  function bindHold(card) {
+    const open = (e) => { e.preventDefault(); card.classList.add('open'); heldOnce = true; $('#o-seen').disabled = false; };
+    const close = () => card.classList.remove('open');
+    card.addEventListener('pointerdown', open);
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => card.addEventListener(ev, close));
+    card.addEventListener('contextmenu', (e) => e.preventDefault());
+    card.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') open(e); });
+    card.addEventListener('keyup', close);
+    card.addEventListener('blur', close);
+  }
+  function fillSecret(card, g) {
+    const cover = el('div', 'secret-cover');
+    cover.append(el('span', 'seal', 'سري'), el('span', null, 'اضغط مطوّل عشان تشوف'));
+    const face = el('div', 'secret-face');
+    if (g.role === 'outsider') {
+      face.append(el('span', 'secret-word', 'أنت برا السالفة'));
+      face.append(el('span', 'secret-cat', g.category ? `الفئة: ${g.category}` : 'ولا تعرف حتى الفئة. اسمع زين وتصرّف'));
+    } else {
+      face.append(el('span', 'secret-cat', `الفئة: ${g.category}`));
+      face.append(el('span', 'secret-word', g.word));
+    }
+    card.replaceChildren(cover, face);
+  }
+  bindHold($('#o-card-big'));
+  bindHold($('#o-card-small'));
+  $('#o-seen').onclick = () => act({ type: 'seen' });
+
+  // ----- Connection -----
+  socket.on('connect', () => {
+    $('#banner').hidden = true;
+    const name = load('kd_name');
+    if (name) join(name); else showJoin();
+  });
+  socket.on('disconnect', () => { $('#banner').hidden = false; });
+  socket.on('state', (s) => {
+    if (!s.me) return;
+    S = s;
+    deadline = s.g && s.g.remaining ? Date.now() + s.g.remaining : 0;
+    render();
+  });
+
+  const nameOf = (id) => (S.players.find((p) => p.id === id) || {}).name || '؟';
+
+  function render() {
+    const me = S.me;
+    const playing = S.stage === 'playing';
+    const gameKey = playing ? S.game : S.selected;
+    document.body.dataset.game = gameKey;
+    $('#me-line').textContent = `${me.name}: ${pts(me.score)}`;
+    $('#bar-title').textContent = playing ? S.title : 'ألعاب السهرة';
+
+    if (!playing) {
+      if (renaming) return;
+      lastKey = '';
+      finalBuzzed = false;
+      const game = S.games.find((g) => g.key === S.selected);
+      $('#hello').textContent = `أهلًا ${me.name}`;
+      $('#lobby-game').textContent = game ? game.title : '';
+      $('#lobby-count').textContent = `داخلين الحين: ${fmt(S.players.filter((p) => p.connected).length)}`;
+      show('s-lobby');
+      return tick();
+    }
+    renaming = false;
+    const g = S.g;
+    // Reset inputs when a new round starts
+    const key = `${S.game}:${g.round}`;
+    const fresh = key !== lastKey;
+    lastKey = key;
+    if (fresh && g.phase !== 'final') buzz(40);
+
+    if (g.phase === 'final') renderFinal();
+    else if (S.game === 'kaddab') renderKaddab(fresh);
+    else renderOutsider(fresh);
+    tick();
+  }
+
+  function renderKaddab(fresh) {
+    const g = S.g, mine = S.me.g;
+    if (fresh) {
+      $('#lie').value = '';
+      $('#lie-err').textContent = '';
+      $('#lie').maxLength = g.maxLie;
+      $('#lie-count').textContent = `${fmt(0)} / ${fmt(g.maxLie)}`;
+    }
+    if (g.phase === 'writing') {
+      if (mine.lie) { $('#my-lie').textContent = `«${mine.lie}»`; show('k-written'); }
+      else {
+        const wasHidden = $('#k-write').hidden;
+        renderQuestion($('#kw-question'), g.question);
+        show('k-write');
+        if (wasHidden) setTimeout(() => $('#lie').focus(), 50);
+      }
+    } else if (g.phase === 'voting') {
+      if (mine.vote) {
+        const o = g.options.find((x) => x.id === mine.vote);
+        $('#kv-mine').textContent = o ? `«${o.text}»` : '';
+        show('k-voted');
+      } else {
+        renderQuestion($('#kv-question'), g.question);
+        const box = $('#kv-opts');
+        box.replaceChildren();
+        for (const o of g.options) {
+          if (o.id === mine.ownOption) continue;
+          const b = el('button', 'card opt', o.text);
+          b.type = 'button';
+          b.onclick = () => {
+            box.querySelectorAll('button').forEach((x) => (x.disabled = true));
+            act({ type: 'vote', option: o.id }, $('#kv-err'), (res) => {
+              if (res.error) box.querySelectorAll('button').forEach((x) => (x.disabled = false));
+            });
+          };
+          box.append(b);
+        }
+        show('k-vote');
+      }
+    } else if (g.phase === 'reveal') {
+      const truth = g.options.find((o) => o.truth);
+      const picked = g.options.find((o) => o.id === mine.vote);
+      const own = g.options.find((o) => o.id === mine.ownOption);
+      const fooled = own ? own.voters.filter((v) => v !== S.me.id).map(nameOf) : [];
+      $('#kr-gain').textContent = mine.gain ? `+${fmt(mine.gain)}` : 'صفر';
+      $('#kr-gain').classList.toggle('zero', !mine.gain);
+      let v = !picked ? 'ما لحقت تصوّت.' : picked.truth ? 'عرفت الصح!' : `انخدعت بكذبة ${picked.authors.map(nameOf).join(' و ')}.`;
+      if (fooled.length) v += ` وانخدع بكذبتك: ${fooled.join('، ')}.`;
+      $('#kr-verdict').textContent = v;
+      $('#kr-truth').textContent = truth ? `الصح: «${truth.text}»` : '';
+      $('#kr-total').textContent = `مجموعك: ${pts(S.me.score)}`;
+      show('k-reveal');
+    }
+  }
+
+  function renderOutsider(fresh) {
+    const g = S.g, mine = S.me.g;
+    if (fresh) {
+      heldOnce = false;
+      $('#o-seen').disabled = true;
+      fillSecret($('#o-card-big'), mine);
+      fillSecret($('#o-card-small'), mine);
+    }
+    if (g.phase === 'reveal') {
+      $('#o-seen').hidden = mine.seen;
+      $('#o-seen').disabled = !heldOnce;
+      $('#o-seen-wait').hidden = !mine.seen;
+      show('o-reveal');
+    } else if (g.phase === 'questions') {
+      const t = g.turn;
+      const st = $('#oq-status');
+      st.replaceChildren();
+      const btn = $('#oq-next');
+      btn.hidden = true;
+      const myTurn = t && (t.asker === S.me.id || t.target === S.me.id);
+      if (myTurn && t.index !== lastBuzzTurn) buzz([60, 40, 60]);
+      lastBuzzTurn = t ? t.index : null;
+      if (t && t.asker === S.me.id) {
+        st.append('دورك! اسأل ', el('b', null, nameOf(t.target)));
+        $('#oq-hint').textContent = 'سؤال عن الكلمة، بدون ما تكشفها.';
+        btn.textContent = 'سألت وجاوب، التالي';
+        btn.hidden = false;
+      } else if (t && t.target === S.me.id) {
+        st.append('السؤال لك من ', el('b', null, nameOf(t.asker)));
+        $('#oq-hint').textContent = 'جاوب بذكاء، لا تكشفها ولا تبان ضايع.';
+        btn.textContent = 'جاوبت، التالي';
+        btn.hidden = false;
+      } else if (t) {
+        st.append('السؤال من ', el('b', null, nameOf(t.asker)), ' إلى ', el('b', null, nameOf(t.target)));
+        $('#oq-hint').textContent = 'اسمع زين.';
+      }
+      show('o-questions');
+    } else if (g.phase === 'discuss') {
+      show('o-discuss');
+    } else if (g.phase === 'voting') {
+      if (mine.vote) {
+        $('#ov-mine').textContent = nameOf(mine.vote);
+        show('o-voted');
+      } else {
+        const box = $('#ov-opts');
+        box.replaceChildren();
+        for (const p of S.players) {
+          if (p.id === S.me.id) continue;
+          const b = el('button', 'card opt', p.name);
+          b.type = 'button';
+          b.onclick = () => {
+            box.querySelectorAll('button').forEach((x) => (x.disabled = true));
+            act({ type: 'vote', target: p.id }, $('#ov-err'), (res) => {
+              if (res.error) box.querySelectorAll('button').forEach((x) => (x.disabled = false));
+            });
+          };
+          box.append(b);
+        }
+        show('o-vote');
+      }
+    } else if (g.phase === 'guess') {
+      if (mine.guessOptions) {
+        const box = $('#og-opts');
+        if (fresh || !box.children.length || box.dataset.round !== String(g.round)) {
+          box.dataset.round = g.round;
+          box.replaceChildren();
+          for (const w of mine.guessOptions) {
+            const b = el('button', 'card opt', w);
+            b.type = 'button';
+            b.onclick = () => {
+              box.querySelectorAll('button').forEach((x) => (x.disabled = true));
+              act({ type: 'guess', word: w }, $('#og-err'), (res) => {
+                if (res.error) box.querySelectorAll('button').forEach((x) => (x.disabled = false));
+              });
+            };
+            box.append(b);
+          }
+        }
+        show('o-guess');
+      } else {
+        show('o-guess-wait');
+      }
+    } else if (g.phase === 'result') {
+      const out = nameOf(g.outsider);
+      const iAmOut = mine.role === 'outsider';
+      const lines = iAmOut
+        ? { caught: 'انكشفت.', escaped: 'فلت منهم!', framed: `فلت، وظلموا ${nameOf(g.accused)}!` }
+        : { caught: `كشفتوا ${out}!`, escaped: `ما أحد كشف ${out}، وكان برا السالفة.`, framed: `ظلمتوا ${nameOf(g.accused)}، واللي برا السالفة كان ${out}.` };
+      const guessLine = g.guess == null ? '' : iAmOut
+        ? (g.guessed ? ' وعرفت الكلمة!' : ' والتخمين طلع غلط.')
+        : (g.guessed ? ' والتخمين طلع صح.' : ' والتخمين طلع غلط.');
+      $('#ox-gain').textContent = mine.gain ? `+${fmt(mine.gain)}` : 'صفر';
+      $('#ox-gain').classList.toggle('zero', !mine.gain);
+      $('#ox-verdict').textContent = lines[g.outcome] + guessLine;
+      $('#ox-word').textContent = `الكلمة كانت: «${g.word}»`;
+      $('#ox-total').textContent = `مجموعك: ${pts(S.me.score)}`;
+      show('o-result');
+    }
+  }
+  $('#oq-next').onclick = () => { $('#oq-next').disabled = true; act({ type: 'next' }, null, () => { $('#oq-next').disabled = false; }); };
+
+  function renderFinal() {
+    const g = S.g;
+    const sorted = [...S.players].sort((a, b) => b.score - a.score);
+    const top = sorted.length ? sorted[0].score : 0;
+    const winners = sorted.filter((p) => p.score === top);
+    const iWon = S.me.score === top;
+    const rank = 1 + sorted.filter((p) => p.score > S.me.score).length;
+    const tied = sorted.filter((p) => p.score === S.me.score).length > 1;
+
+    $('#pf-title').hidden = !iWon;
+    $('#pf-title').textContent = winners.length > 1 ? `تعادل على لقب ${g.winnerTitle}` : g.winnerTitle;
+    $('#rank-label').textContent = iWon ? '' : tied ? 'تعادلت في المركز' : 'مركزك';
+    $('#rank').textContent = iWon ? 'هذا أنت!' : ORDINALS[rank - 1] || fmt(rank);
+    $('#final-score').textContent = `مجموعك: ${pts(S.me.score)}`;
+    $('#pf-winner').textContent = iWon ? '' : `${g.winnerTitle}: ${winners.map((p) => p.name).join(' و ')}`;
+    const mineAwards = (g.awards || []).filter((a) => a.ids.includes(S.me.id));
+    $('#pf-awards').replaceChildren(...mineAwards.map((a) => {
+      const li = el('li');
+      li.append('🏅 ', el('b', null, a.title));
+      return li;
+    }));
+    if (iWon && !finalBuzzed) buzz([80, 60, 80, 60, 160]);
+    finalBuzzed = true;
+    show('s-final');
+  }
+
+  function tick() {
+    const bar = $('#timebar');
+    const active = S && S.stage === 'playing' && deadline;
+    bar.hidden = !active;
+    if (!active) return;
+    const left = Math.max(0, deadline - Date.now());
+    bar.querySelector('i').style.width = `${(S.g.duration ? left / S.g.duration : 0) * 100}%`;
+    bar.classList.toggle('low', left < 10000);
+  }
+  setInterval(tick, 250);
+</script>
+</body>
+</html>
