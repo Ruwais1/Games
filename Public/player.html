@@ -69,6 +69,15 @@
   .cert img { width: 100%; max-width: 360px; height: auto; border-radius: 10px; box-shadow: 5px 6px 0 rgba(0, 0, 0, .35); -webkit-touch-callout: default; }
   .cert-actions { display: flex; gap: 10px; align-items: center; }
   .cert-tip { font-size: .85rem; }
+  /* Malaf Al-Qadiya */
+  .story { line-height: 1.8; font-size: 1.05rem; }
+  .suspects.phone .suspect { background: var(--paper); }
+  .evidence.phone { gap: 22px; padding-top: 8px; }
+  .case-ref { background: var(--night-2); border-radius: 12px; padding: .6em .8em; }
+  .case-ref summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  .case-ref[open] { display: flex; flex-direction: column; gap: 14px; }
+  .case-ref .evidence { padding-top: 14px; }
+  .letter { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--display); font-size: .85em; margin-inline-end: .4em; vertical-align: middle; }
   .banner {
     position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--stamp); color: #fff; padding: .6em 1em; border-radius: 10px; text-align: center;
@@ -190,6 +199,59 @@
     <p class="muted" id="ox-total"></p>
   </section>
 
+  <!-- Malaf Al-Qadiya -->
+  <section id="d-intro" hidden>
+    <div class="case-badges">
+      <span class="badge cat" id="pdi-cat"></span>
+      <span class="diff" id="pdi-diff"><span class="diff-label">الصعوبة:</span><b id="pdi-diff-val"></b><span class="diff-dots" id="pdi-dots"></span></span>
+    </div>
+    <h2 class="q" id="pdi-title"></h2>
+    <p class="story" id="pdi-story"></p>
+    <ul class="suspects phone" id="pdi-suspects"></ul>
+    <button class="btn" id="pdi-ready">قريتها، جاهز</button>
+    <p class="muted center" id="pdi-wait" hidden>تمام. انتظر الباقين.</p>
+  </section>
+
+  <section id="d-evidence" hidden>
+    <h2 class="q">الأدلة</h2>
+    <p class="muted">كبّر الصور وركّز في التفاصيل، والتسجيلات تشتغل من الشاشة.</p>
+    <ul class="evidence phone tilt" id="pde-list"></ul>
+    <button class="btn" id="pde-ready">خلصت، جاهز للأسئلة</button>
+    <p class="muted center" id="pde-wait" hidden>تمام. انتظر الباقين.</p>
+  </section>
+
+  <section id="d-question" hidden>
+    <p class="muted" id="pdq-progress"></p>
+    <h2 class="q" id="pdq-q"></h2>
+    <div class="opts tilt" id="pdq-opts"></div>
+    <p class="err" id="pdq-err" role="alert"></p>
+    <details class="case-ref">
+      <summary>شوف الأدلة والمشتبهين</summary>
+      <ul class="suspects phone" id="pdq-suspects"></ul>
+      <ul class="evidence phone" id="pdq-evidence"></ul>
+    </details>
+  </section>
+
+  <section id="d-answered" class="center" hidden>
+    <p class="muted">جاوبت:</p>
+    <p class="said" id="pdd-mine"></p>
+    <p class="muted">انتظر الباقين.</p>
+  </section>
+
+  <section id="d-answer" class="center" hidden>
+    <p class="score-big" id="pda-gain" dir="ltr"></p>
+    <p class="said" id="pda-verdict"></p>
+    <p id="pda-right"></p>
+    <p class="muted" id="pda-total"></p>
+  </section>
+
+  <section id="d-solution" class="center" hidden>
+    <span class="final-stamp">الحل</span>
+    <div class="culprit" id="pds-culprit"></div>
+    <p class="story" id="pds-text"></p>
+    <p class="muted">اللي بعده من الشاشة.</p>
+  </section>
+
   <!-- End of game -->
   <section id="s-final" class="center" hidden>
     <span class="final-stamp" id="pf-title" hidden></span>
@@ -218,6 +280,7 @@
 <div class="banner" id="banner" hidden>انقطع الاتصال، نحاول نرجعك…</div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/art.js"></script>
 <script>
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => Number(n).toLocaleString('ar-SA');
@@ -402,6 +465,7 @@
 
     if (g.phase === 'final') renderFinal();
     else if (S.game === 'kaddab') renderKaddab(fresh);
+    else if (S.game === 'detective') renderDetective();
     else renderOutsider(fresh);
     tick();
   }
@@ -561,6 +625,93 @@
     }
   }
   $('#oq-next').onclick = () => { $('#oq-next').disabled = true; act({ type: 'next' }, null, () => { $('#oq-next').disabled = false; }); };
+
+  // ----- Malaf Al-Qadiya -----
+  const LETTERS = ['أ', 'ب', 'ج', 'د'];
+  const LEVELS = ['سهلة', 'متوسطة', 'صعبة'];
+  let builtCase = null;
+  let builtQuestion = null;
+
+  function buildCase(c) {
+    const key = `${c.number}:${c.title}`;
+    if (builtCase === key) return;
+    builtCase = key;
+    $('#pdi-cat').textContent = c.categoryTitle;
+    $('#pdi-diff').dataset.level = c.difficulty;
+    $('#pdi-diff-val').textContent = LEVELS[c.difficulty - 1];
+    $('#pdi-dots').textContent = '●'.repeat(c.difficulty) + '○'.repeat(3 - c.difficulty);
+    $('#pdi-title').textContent = `قضية رقم ${fmt(c.number)}: ${c.title}`;
+    $('#pdi-story').textContent = c.story;
+    const suspects = () => c.suspects.map((s) => CaseArt.suspectCard(s));
+    const evidence = () => c.evidence.map((e) => CaseArt.evidenceCard(e));
+    $('#pdi-suspects').replaceChildren(...suspects());
+    $('#pde-list').replaceChildren(...evidence());
+    $('#pdq-suspects').replaceChildren(...suspects());
+    $('#pdq-evidence').replaceChildren(...evidence());
+    $('#pdq-suspects').hidden = !c.suspects.length;
+  }
+
+  function renderDetective() {
+    const g = S.g;
+    const mine = S.me.g;
+    buildCase(g.case);
+    if (g.phase === 'intro' || g.phase === 'evidence') {
+      const p = g.phase === 'intro' ? 'pdi' : 'pde';
+      $(`#${p}-ready`).hidden = mine.ready;
+      $(`#${p}-wait`).hidden = !mine.ready;
+      show(g.phase === 'intro' ? 'd-intro' : 'd-evidence');
+    } else if (g.phase === 'question') {
+      const q = g.question;
+      if (mine.answer != null) {
+        $('#pdd-mine').textContent = `${LETTERS[mine.answer]}. ${q.options[mine.answer]}`;
+        show('d-answered');
+        return;
+      }
+      const key = `${g.case.number}:${q.index}`;
+      if (builtQuestion !== key) {
+        builtQuestion = key;
+        $('#pdq-progress').textContent = `سؤال ${fmt(q.index)} من ${fmt(q.total)} · الجواب الصح بـ${pts(g.case.difficulty)}`;
+        $('#pdq-q').textContent = q.q;
+        $('#pdq-err').textContent = '';
+        const box = $('#pdq-opts');
+        box.replaceChildren(...q.options.map((o, i) => {
+          const b = el('button', 'card opt');
+          b.type = 'button';
+          b.append(el('span', 'letter', LETTERS[i]), o);
+          b.onclick = () => {
+            box.querySelectorAll('button').forEach((x) => (x.disabled = true));
+            act({ type: 'answer', option: i }, $('#pdq-err'), (res) => {
+              if (res.error) box.querySelectorAll('button').forEach((x) => (x.disabled = false));
+            });
+          };
+          return b;
+        }));
+      }
+      show('d-question');
+    } else if (g.phase === 'answer') {
+      const q = g.question;
+      const right = mine.answer === q.answer;
+      $('#pda-gain').textContent = mine.gain ? `+${fmt(mine.gain)}` : 'صفر';
+      $('#pda-gain').classList.toggle('zero', !mine.gain);
+      $('#pda-verdict').textContent = mine.answer == null ? 'ما لحقت تجاوب.' : right ? (g.first === S.me.id ? 'صح، وأنت الأسرع! ⚡' : 'جوابك صح!') : 'جوابك غلط.';
+      $('#pda-right').textContent = `الصح: ${q.options[q.answer]}`;
+      $('#pda-total').textContent = `مجموعك: ${pts(S.me.score)}`;
+      show('d-answer');
+    } else if (g.phase === 'solution') {
+      const box = $('#pds-culprit');
+      box.replaceChildren();
+      const s = g.culprit != null ? g.case.suspects[g.culprit] : null;
+      if (s) {
+        const face = el('div');
+        face.innerHTML = CaseArt.avatar(s.look);
+        box.append(face, el('b', null, `الجاني: ${s.name}`));
+      }
+      $('#pds-text').textContent = g.solution;
+      show('d-solution');
+    }
+  }
+  $('#pdi-ready').onclick = () => act({ type: 'ready' });
+  $('#pde-ready').onclick = () => act({ type: 'ready' });
 
   function renderFinal() {
     const g = S.g;

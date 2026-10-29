@@ -48,13 +48,14 @@
   /* القائمة */
   .lobby { flex: 1; display: grid; grid-template-columns: 1fr minmax(260px, 380px); gap: clamp(24px, 4vw, 72px); align-items: center; }
   .lobby-title { font-family: var(--display); font-weight: 400; font-size: clamp(2.4rem, 4.4vw, 4.4rem); line-height: 1.2; margin: 0 0 .5em; }
-  .games { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 30px); margin-bottom: clamp(18px, 2.2vw, 30px); }
+  .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: clamp(16px, 2vw, 30px); margin-bottom: clamp(18px, 2.2vw, 30px); }
   .game-card {
     border: 0; text-align: start; display: flex; flex-direction: column; gap: .35em;
     padding: 1em 1.2em .9em; opacity: .78; transition: transform .15s, opacity .15s;
   }
   .game-card:nth-child(1) { transform: rotate(-1deg); }
   .game-card:nth-child(2) { transform: rotate(1deg); }
+  .game-card:nth-child(3) { transform: rotate(-.6deg); }
   .game-card[aria-pressed="true"] {
     opacity: 1; transform: translateY(-4px) rotate(0);
     box-shadow: 0 0 0 5px var(--accent), 6px 8px 0 5px rgba(0, 0, 0, .35);
@@ -129,7 +130,7 @@
   .final-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: clamp(16px, 2vw, 30px); }
   .podium { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(16px, 2vw, 30px); animation: rise .6s ease-out 1.2s both; }
   .best-lie { max-width: min(980px, 100%); padding: 1.1em 1.8em .9em; transform: rotate(-1deg); animation: rise .6s ease-out 1s both; }
-  .best-lie .bl-label {
+  .bl-label {
     position: absolute; top: -.85em; inset-inline-start: 1em;
     font-family: var(--display); font-size: clamp(1.05rem, 1.5vw, 1.4rem); line-height: 1.3;
     color: var(--stamp); background: var(--paper); border: 3px solid currentColor; border-radius: 8px;
@@ -152,6 +153,26 @@
   .confetti i { position: absolute; top: -24px; width: 10px; height: 16px; border-radius: 2px; animation: fall var(--d) linear var(--delay) both; }
   @keyframes fall { to { transform: translate(var(--x), 110vh) rotate(var(--r)); } }
 
+  /* Malaf Al-Qadiya */
+  .case-file { display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 20px); padding: clamp(18px, 2vw, 30px) clamp(20px, 2.6vw, 40px); }
+  .case-file .diff { font-size: clamp(1.1rem, 1.6vw, 1.5rem); }
+  .case-file .badge.cat { font-size: clamp(1.2rem, 1.8vw, 1.7rem); }
+  .case-title { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 4vw, 4rem); line-height: 1.2; }
+  .case-story { margin: 0; font-size: clamp(1.15rem, 1.7vw, 1.65rem); line-height: 1.75; max-width: 70ch; }
+  .case-file .suspects { font-size: clamp(.95rem, 1.2vw, 1.15rem); }
+  .suspects.mini { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .suspects.mini .suspect { background: var(--night-2); color: var(--paper); box-shadow: none; }
+  .suspects.mini .suspect-role { color: var(--mist); }
+  .suspects.mini .suspect-face { width: 44px; height: 44px; }
+  #d-evidence .evidence { font-size: clamp(.95rem, 1.15vw, 1.15rem); }
+  .letter { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--display); font-size: .8em; margin-inline-end: .4em; vertical-align: middle; }
+  .options .card .who b { color: var(--accent-ink); }
+  .solution { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 2em 2em 1.4em; text-align: center; }
+  .solution-text { margin: 0; font-size: clamp(1.2rem, 1.8vw, 1.7rem); line-height: 1.8; max-width: 60ch; }
+  .solution .bl-label { color: var(--accent-ink); font-size: clamp(1.4rem, 2vw, 1.9rem); }
+  .culprit .stamp { position: static; font-size: clamp(1.3rem, 1.8vw, 1.7rem); margin-top: -.6em; }
+  .culprit .avatar { width: clamp(120px, 12vw, 170px); height: auto; }
+  .culprit b { font-size: clamp(2rem, 3vw, 2.8rem); }
   .tools { position: fixed; bottom: 14px; left: 14px; display: flex; gap: .6rem; }
   .offline { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--stamp); color: #fff; padding: .4em 1.1em; border-radius: 10px; }
 
@@ -286,6 +307,65 @@
     <div class="actions"><button class="btn" data-next>الجولة الجاية</button></div>
   </section>
 
+  <!-- Malaf Al-Qadiya -->
+  <section id="d-intro" hidden>
+    <div class="tape" aria-hidden="true"><span>مسرح جريمة · ممنوع الاقتراب · مسرح جريمة · ممنوع الاقتراب · مسرح جريمة · ممنوع الاقتراب · مسرح جريمة · ممنوع الاقتراب ·</span></div>
+    <div class="card case-file">
+      <div class="case-badges">
+        <span class="badge cat" id="di-cat"></span>
+        <span class="diff" id="di-diff"><span class="diff-label">الصعوبة:</span><b id="di-diff-val"></b><span class="diff-dots" id="di-dots"></span></span>
+      </div>
+      <h2 class="case-title" id="di-title"></h2>
+      <p class="case-story" id="di-story"></p>
+      <ul class="suspects" id="di-suspects"></ul>
+    </div>
+    <ul class="chips" id="di-players"></ul>
+    <div class="actions">
+      <button class="btn-quiet" id="di-tts" hidden>🗣️ اسمع القصة</button>
+      <button class="btn-quiet" data-skip>يلا نفحص الأدلة</button>
+    </div>
+  </section>
+
+  <section id="d-evidence" hidden>
+    <h2 class="question small" id="de-title"></h2>
+    <ul class="evidence tilt" id="de-list"></ul>
+    <ul class="suspects mini" id="de-suspects"></ul>
+    <ul class="chips" id="de-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>يلا الأسئلة</button></div>
+  </section>
+
+  <section id="d-question" hidden>
+    <p class="hint" id="dq-progress"></p>
+    <div class="grow">
+      <h2 class="question" id="dq-q"></h2>
+      <ul class="options tilt" id="dq-options"></ul>
+    </div>
+    <ul class="chips" id="dq-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="d-answer" hidden>
+    <h2 class="question small" id="da-q"></h2>
+    <div class="reveal">
+      <ul class="options tilt" id="da-options"></ul>
+      <div class="board"><h3>النقاط</h3><ol id="da-board"></ol></div>
+    </div>
+    <p class="hint" id="da-first"></p>
+    <div class="actions"><button class="btn" id="da-next">التالي</button></div>
+  </section>
+
+  <section id="d-solution" hidden>
+    <div class="reveal">
+      <div class="card solution">
+        <span class="bl-label">الحل</span>
+        <div class="culprit" id="ds-culprit"></div>
+        <p class="solution-text" id="ds-text"></p>
+      </div>
+      <div class="board"><h3>النقاط</h3><ol id="ds-board"></ol></div>
+    </div>
+    <div class="actions"><button class="btn" id="ds-next">التالي</button></div>
+  </section>
+
   <!-- End of game -->
   <section id="final" hidden>
     <div class="final">
@@ -317,6 +397,7 @@
 <div class="offline" id="offline" hidden>انقطع الاتصال بالسيرفر، نحاول نرجع…</div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/art.js"></script>
 <script>
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => Number(n).toLocaleString('ar-SA');
@@ -367,6 +448,7 @@
     }
     return {
       get on() { return on; },
+      ctx: () => audio(),
       toggle() {
         on = !on;
         try { localStorage.setItem('sfx', on ? 'on' : 'off'); } catch (e) {}
@@ -424,6 +506,8 @@
 
   $('#start').onclick = () => socket.emit('host:start');
   $('#add-bot').onclick = () => socket.emit('host:addBot');
+  $('#da-next').onclick = () => socket.emit('host:action', 'next');
+  $('#ds-next').onclick = () => socket.emit('host:action', 'next');
   $('#clear-bots').onclick = () => socket.emit('host:clearBots');
   $('#back').onclick = () => socket.emit('host:end');
   $('#end').onclick = () => { if (confirm('تبي تنهي اللعبة وترجع للقائمة؟ النقاط راح تنمسح.')) socket.emit('host:end'); };
@@ -468,7 +552,7 @@
   function sectionId() {
     if (S.stage === 'lobby') return 'lobby';
     if (S.g.phase === 'final') return 'final';
-    return (S.game === 'kaddab' ? 'k-' : 'o-') + S.g.phase;
+    return ({ kaddab: 'k-', outsider: 'o-', detective: 'd-' })[S.game] + S.g.phase;
   }
 
   function render() {
@@ -480,7 +564,7 @@
     $('#end').hidden = !playing || id === 'final';
     if (playing) {
       $('#game-title').textContent = S.title;
-      $('#round').textContent = `الجولة ${fmt(S.g.round)} من ${fmt(S.g.rounds)}`;
+      $('#round').textContent = `${S.game === 'detective' ? 'القضية' : 'الجولة'} ${fmt(S.g.round)} من ${fmt(S.g.rounds)}`;
       document.querySelectorAll('[data-next]').forEach((b) => (b.textContent = S.g.round >= S.g.rounds ? 'النتيجة النهائية' : 'الجولة الجاية'));
     }
     (renderers[id] || (() => {}))();
@@ -490,6 +574,76 @@
     }
     tick();
   }
+
+  // ----- Malaf Al-Qadiya helpers -----
+  const LETTERS = ['أ', 'ب', 'ج', 'د'];
+  const LEVELS = ['سهلة', 'متوسطة', 'صعبة'];
+  const dots = (n) => '●'.repeat(n) + '○'.repeat(3 - n);
+  let builtCase = null;
+  // Case text, suspects and evidence only change between cases, so build them once per case
+  function buildCase(c) {
+    const key = `${c.number}:${c.title}`;
+    if (builtCase === key) return;
+    builtCase = key;
+    $('#di-cat').textContent = c.categoryTitle;
+    $('#di-title').textContent = `قضية رقم ${fmt(c.number)}: ${c.title}`;
+    $('#di-story').textContent = c.story;
+    $('#di-suspects').replaceChildren(...c.suspects.map((s) => CaseArt.suspectCard(s)));
+    $('#de-title').textContent = `أدلة قضية «${c.title}»`;
+    $('#de-list').replaceChildren(...c.evidence.map((e) => CaseArt.evidenceCard(e, { onPlay: playClue })));
+    $('#de-suspects').replaceChildren(...c.suspects.map((s) => CaseArt.suspectCard(s, { short: true })));
+    $('#de-suspects').hidden = !c.suspects.length;
+    setDifficulty(c.difficulty);
+  }
+  function setDifficulty(level) {
+    $('#di-diff').dataset.level = level;
+    $('#di-diff-val').textContent = LEVELS[level - 1];
+    $('#di-dots').textContent = dots(level);
+  }
+  // A short slot-machine roll before the real difficulty lands
+  function rollDifficulty(level) {
+    const box = $('#di-diff');
+    box.classList.remove('landed');
+    box.classList.add('rolling');
+    let i = 0;
+    const spin = setInterval(() => {
+      const l = (i++ % 3) + 1;
+      box.dataset.level = l;
+      $('#di-diff-val').textContent = LEVELS[l - 1];
+      $('#di-dots').textContent = dots(l);
+      sfx.tick();
+    }, 120);
+    setTimeout(() => {
+      clearInterval(spin);
+      box.classList.remove('rolling');
+      setDifficulty(level);
+      void box.offsetWidth;
+      box.classList.add('landed');
+      sfx.stamp();
+    }, 1800);
+  }
+  function playClue(name, button) {
+    const secs = CaseArt.playClue(sfx.ctx(), name);
+    if (!secs) return;
+    button.disabled = true;
+    setTimeout(() => (button.disabled = false), secs * 1000 + 300);
+  }
+  // Read the story aloud, only if this computer has an Arabic voice
+  const arabicVoice = () => {
+    try { return speechSynthesis.getVoices().find((v) => /^ar([-_]|$)/i.test(v.lang)); } catch (e) { return null; }
+  };
+  function updateTts() { $('#di-tts').hidden = !arabicVoice(); }
+  if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = updateTts;
+  $('#di-tts').onclick = () => {
+    const v = arabicVoice();
+    if (!v || !S.g.case) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(S.g.case.story);
+    u.voice = v;
+    u.lang = v.lang;
+    u.rate = 0.95;
+    speechSynthesis.speak(u);
+  };
 
   // Sounds and effects that play once, when a screen first appears
   let lastSection = null;
@@ -503,6 +657,10 @@
       for (let i = 0; i <= lies; i++) sfx.stamp(i * 0.5 + 0.12);
     }
     if (id === 'o-result') sfx.stamp(0.1);
+    if (id === 'd-intro') rollDifficulty(S.g.case.difficulty);
+    if (id === 'd-answer' || id === 'd-solution') sfx.stamp(0.1);
+    if (id === 'd-question') sfx.chime();
+    if (id !== 'd-intro' && 'speechSynthesis' in window) speechSynthesis.cancel();
     if (id === 'final') {
       sfx.fanfare();
       confetti();
@@ -651,6 +809,61 @@
         votes.append(li);
       }
       fillBoard($('#ox-board'), g.gains);
+    },
+
+    // ----- Malaf Al-Qadiya -----
+    'd-intro'() {
+      const c = S.g.case;
+      buildCase(c);
+      fillChips($('#di-players'), S.g.done);
+      updateTts();
+    },
+    'd-evidence'() {
+      buildCase(S.g.case);
+      fillChips($('#de-players'), S.g.done);
+    },
+    'd-question'() {
+      const q = S.g.question;
+      $('#dq-progress').textContent = `سؤال ${fmt(q.index)} من ${fmt(q.total)} · الجواب الصح بـ${pts(S.g.case.difficulty)}`;
+      $('#dq-q').textContent = q.q;
+      $('#dq-options').replaceChildren(...q.options.map((o, i) => {
+        const li = el('li', 'card');
+        li.append(el('span', null, ''));
+        li.firstChild.append(el('span', 'letter', LETTERS[i]), o);
+        return li;
+      }));
+      fillChips($('#dq-players'), S.g.done);
+    },
+    'd-answer'() {
+      const q = S.g.question;
+      $('#da-q').textContent = q.q;
+      $('#da-options').replaceChildren(...q.options.map((o, i) => {
+        const right = i === q.answer;
+        const li = el('li', 'card' + (right ? ' is-truth' : ''));
+        if (right) li.append(el('span', 'stamp truth', 'الصح'));
+        const t = el('span');
+        t.append(el('span', 'letter', LETTERS[i]), o);
+        const names = q.picks[i].map(nameOf);
+        li.append(t, el('span', 'who', names.length ? `اختاروه: ${list(names)}` : 'ما أحد اختاره'));
+        return li;
+      }));
+      fillBoard($('#da-board'), S.g.gains);
+      $('#da-first').textContent = S.g.first ? `⚡ أسرع جواب صح: ${nameOf(S.g.first)}، ونقطة زيادة` : 'ما أحد جاب الصح هالمرة';
+      $('#da-next').textContent = q.index < q.total ? 'السؤال الجاي' : 'الحل';
+    },
+    'd-solution'() {
+      const c = S.g.case;
+      const box = $('#ds-culprit');
+      box.replaceChildren();
+      if (S.g.culprit != null && c.suspects[S.g.culprit]) {
+        const s = c.suspects[S.g.culprit];
+        const face = el('div');
+        face.innerHTML = CaseArt.avatar(s.look);
+        box.append(face, el('span', 'stamp', 'الجاني'), el('b', null, s.name));
+      }
+      $('#ds-text').textContent = S.g.solution;
+      fillBoard($('#ds-board'), null);
+      $('#ds-next').textContent = S.g.round < S.g.rounds ? 'القضية الجاية' : 'النتيجة النهائية';
     },
 
     final() {
