@@ -46,11 +46,11 @@ module.exports = {
   ],
 
   create(ctx, cfg) {
-    const st = { phase: 'writing', round: 0, question: null, lies: new Map(), options: [], votes: new Map(), gains: {} };
+    const st = { phase: 'writing', round: 0, question: null, lies: new Map(), options: [], votes: new Map(), gains: {}, bestLie: null };
     // Per-player stats for the end-of-game awards
     const stats = new Map();
     const stat = (id) => {
-      if (!stats.has(id)) stats.set(id, { truths: 0, fooled: 0 });
+      if (!stats.has(id)) stats.set(id, { truths: 0, fooled: 0, bestLie: null });
       return stats.get(id);
     };
     const clock = createClock(() => {
@@ -95,6 +95,16 @@ module.exports = {
           stat(pid).fooled++;
           for (const a of o.authors) if (a !== pid) gains[a] = (gains[a] || 0) + FOOL_POINTS;
         }
+      }
+      // Remember the lie that fooled the most people: per player, and for the whole night
+      for (const o of st.options) {
+        if (o.truth) continue;
+        const author = o.authors[0];
+        const fooled = o.voters.filter((v) => v !== author).length;
+        if (!fooled) continue;
+        const lie = { author, text: o.text, question: st.question.q, fooled };
+        if (!stat(author).bestLie || fooled > stat(author).bestLie.fooled) stat(author).bestLie = lie;
+        if (!st.bestLie || fooled > st.bestLie.fooled) st.bestLie = lie;
       }
       for (const [pid, g] of Object.entries(gains)) {
         const p = ctx.get(pid);
@@ -154,6 +164,7 @@ module.exports = {
             { key: 'truths', title: 'كاشف الكذب', label: 'مرات اختيار الصح' },
             { key: 'fooled', title: 'أطيب قلب', label: 'مرات تصديق الكذب' },
           ], (id) => !!ctx.get(id));
+          s.bestLie = st.bestLie && ctx.get(st.bestLie.author) ? st.bestLie : null;
         }
         return s;
       },
@@ -165,6 +176,7 @@ module.exports = {
           vote: st.votes.get(p.id) || null,
           ownOption: own ? own.id : null,
           gain: st.phase === 'reveal' ? st.gains[p.id] || 0 : null,
+          bestLie: st.phase === 'final' && stats.has(p.id) ? stats.get(p.id).bestLie : null,
         };
       },
 
