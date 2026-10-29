@@ -7,6 +7,7 @@ const TRUTH_POINTS = 2; // for picking the truth
 const FOOL_POINTS = 1; // for the liar, per player fooled
 const MAX_LIE = 40;
 const used = new Set(); // questions already played, so they don't repeat
+const between = (a, b) => a + Math.floor(Math.random() * (b - a));
 
 // An award goes to the player(s) with the highest non-zero value of one stat
 function awards(stats, defs, exists) {
@@ -200,6 +201,23 @@ module.exports = {
           if (st.round >= cfg.rounds) setPhase('final');
           else nextRound();
         }
+      },
+
+      // What a test bot does now: write a lie, then vote for any option but its own
+      botMove(p) {
+        if (st.phase === 'writing' && !st.lies.has(p.id)) {
+          const taken = new Set([...st.lies.values()].map(normalize));
+          const pool = shuffle(QUESTIONS.map((x) => x.a)).filter((t) => !isTruth(t) && !taken.has(normalize(t)));
+          const text = pool[0] || `كذبة ${p.name}`;
+          return { key: `w${st.round}`, delay: between(2500, 7000), data: { type: 'lie', text } };
+        }
+        if (st.phase === 'voting' && !st.votes.has(p.id)) {
+          const choices = st.options.filter((o) => !o.authors.includes(p.id));
+          if (!choices.length) return null;
+          const pick = choices[Math.floor(Math.random() * choices.length)];
+          return { key: `v${st.round}`, delay: between(2500, 6000), data: { type: 'vote', option: pick.id } };
+        }
+        return null;
       },
 
       onDisconnect() {
