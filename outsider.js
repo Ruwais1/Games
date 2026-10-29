@@ -1,14 +1,14 @@
 'use strict';
-// لعبة برا السالفة
+// Bara Al-Salfa: everyone knows the secret word except one player
 const CATEGORIES = require('./words');
 const { shuffle, pick, ar, options, seconds, createClock } = require('./util');
 
 const GUESS_SECONDS = 30;
-const GUESS_OPTIONS = 8; // عدد الكلمات اللي تطلع للي برا السالفة وقت التخمين
-const INSIDER_POINTS = 1; // لكل واحد يعرف الكلمة إذا انكشف اللي برا السالفة
-const ESCAPE_POINTS = 2; // للي برا السالفة إذا ما انكشف
-const GUESS_POINTS = 1; // نقطة زيادة للي برا السالفة إذا خمّن الكلمة صح
-const usedWords = new Map(); // الفئة -> الكلمات اللي انلعبت
+const GUESS_OPTIONS = 8; // words offered to the outsider when guessing
+const INSIDER_POINTS = 1; // each insider, when the outsider is caught
+const ESCAPE_POINTS = 2; // the outsider, when not caught
+const GUESS_POINTS = 1; // bonus for the outsider guessing the word
+const usedWords = new Map(); // category key -> words already played
 
 function pickWord(cat) {
   let used = usedWords.get(cat.key) || new Set();
@@ -23,10 +23,10 @@ function pickWord(cat) {
   return word;
 }
 
-// كل دورة سلسلة وحدة: اللي جاوب هو اللي يسأل بعده، والسلسلة تلف على الكل.
-// كذا كل واحد يسأل مرة وينسأل مرة في كل دورة، بالتساوي.
-// ونحاول ما نكرر نفس الثنائي في الدورات اللي بعدها،
-// فمع ٣ لاعبين ودورتين: كل واحد يسأل الاثنين.
+// Each lap is one chain: whoever answered asks next, looping through everyone.
+// So per lap every player asks once and is asked once.
+// Later laps try not to repeat a pair, so with 3 players and 2 laps
+// everyone asks both others.
 function buildTurns(ids, laps) {
   const used = new Set();
   const turns = [];
@@ -52,11 +52,25 @@ function buildTurns(ids, laps) {
   return turns;
 }
 
+// An award goes to the player(s) with the highest non-zero value of one stat
+function awards(stats, defs, exists) {
+  return defs
+    .map((d) => {
+      const rows = [...stats].filter(([id]) => exists(id));
+      const best = Math.max(0, ...rows.map(([, s]) => s[d.key] || 0));
+      const ids = best ? rows.filter(([, s]) => s[d.key] === best).map(([id]) => id) : [];
+      return { title: d.title, label: d.label, value: best, ids, total: rows.length };
+    })
+    // Skip an award shared by more than half the players: it means nothing
+    .filter((a) => a.ids.length && a.ids.length <= Math.max(1, Math.floor(a.total / 2)));
+}
+
 module.exports = {
   key: 'outsider',
   title: 'برا السالفة',
   tagline: 'الكل يعرف الكلمة إلا واحد. اكشفوه قبل ما يكشفها.',
   minPlayers: 3,
+  winnerTitle: 'ذيب السالفة',
   settings: [
     {
       key: 'category',
@@ -115,6 +129,12 @@ module.exports = {
       guessed: false,
       gains: {},
     };
+    // Per-player stats for the end-of-game awards
+    const stats = new Map();
+    const stat = (id) => {
+      if (!stats.has(id)) stats.set(id, { hawk: 0, escapes: 0 });
+      return stats.get(id);
+    };
     const clock = createClock(() => {
       if (st.phase === 'discuss') setPhase('voting', cfg.voteTime);
       else if (st.phase === 'voting') tally();
@@ -151,7 +171,7 @@ module.exports = {
       return p && p.connected;
     };
 
-    // نتخطى أي سؤال صاحبه أو اللي ينسأل مو موجود
+    // Skip any turn whose asker or target is not connected
     function skipMissing() {
       while (st.turn < st.turns.length && !(live(st.turns[st.turn].asker) && live(st.turns[st.turn].target))) st.turn++;
     }
@@ -175,8 +195,8 @@ module.exports = {
       else setPhase('voting', cfg.voteTime);
     }
 
-    // ينمسك الشخص إذا جاب أكثر أصوات لوحده، وبصوتين على الأقل.
-    // وبعد التصويت، اللي برا السالفة يخمّن الكلمة دايم، سواء انمسك أو لا
+    // A player is caught with the most votes alone, and at least two votes.
+    // After voting the outsider always gets to guess the word, caught or not.
     function tally() {
       const counts = new Map();
       for (const target of st.votes.values()) counts.set(target, (counts.get(target) || 0) + 1);
@@ -184,6 +204,8 @@ module.exports = {
       const leaders = [...counts].filter(([, c]) => c === max).map(([id]) => id);
       st.accused = max >= 2 && leaders.length === 1 ? leaders[0] : null;
       st.outcome = st.accused === st.outsider ? 'caught' : st.accused ? 'framed' : 'escaped';
+      for (const [voter, target] of st.votes) if (target === st.outsider) stat(voter).hawk++;
+      if (st.outcome !== 'caught') stat(st.outsider).escapes++;
 
       const others = shuffle(st.cat.words.filter((w) => w !== st.word)).slice(0, GUESS_OPTIONS - 1);
       st.guessOptions = shuffle([st.word, ...others]);
@@ -237,7 +259,7 @@ module.exports = {
 
       snapshot() {
         const t = st.turns[st.turn];
-        // الشاشة يشوفها الكل، فما تعرض الكلمة ولا مين برا السالفة إلا في النهاية
+        // Everyone sees the big screen: never show the word or the outsider before the result
         const s = {
           phase: st.phase,
           round: st.round,
@@ -248,7 +270,7 @@ module.exports = {
           done: st.phase === 'reveal' ? [...st.seen] : st.phase === 'voting' ? [...st.votes.keys()] : [],
           turn: st.phase === 'questions' && t ? { asker: t.asker, target: t.target, index: st.turn + 1, total: st.turns.length } : null,
         };
-        // وقت التخمين ما نكشف مين انمسك، عشان تبقى المفاجأة للنتيجة
+        // Keep the vote result secret during the guess, for the reveal
         if (st.phase === 'result') {
           Object.assign(s, {
             accused: st.accused,
@@ -260,6 +282,13 @@ module.exports = {
             votes: Object.fromEntries(st.votes),
             gains: st.gains,
           });
+        }
+        if (st.phase === 'final') {
+          s.winnerTitle = module.exports.winnerTitle;
+          s.awards = awards(stats, [
+            { key: 'hawk', title: 'عين الصقر', label: 'مرات التصويت الصح' },
+            { key: 'escapes', title: 'أفضل ممثل', label: 'مرات الإفلات' },
+          ], (id) => !!ctx.get(id));
         }
         return s;
       },
