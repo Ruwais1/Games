@@ -9,6 +9,7 @@ const INSIDER_POINTS = 1; // each insider, when the outsider is caught
 const ESCAPE_POINTS = 2; // the outsider, when not caught
 const GUESS_POINTS = 1; // bonus for the outsider guessing the word
 const usedWords = new Map(); // category key -> words already played
+const between = (a, b) => a + Math.floor(Math.random() * (b - a));
 
 function pickWord(cat) {
   let used = usedWords.get(cat.key) || new Set();
@@ -344,6 +345,28 @@ module.exports = {
           if (st.round >= cfg.rounds) setPhase('final');
           else startRound();
         }
+      },
+
+      // What a test bot does now. Bots don't reason: they vote and guess at random.
+      botMove(p) {
+        const r = st.round;
+        if (st.phase === 'reveal' && !st.seen.has(p.id)) {
+          return { key: `s${r}`, delay: between(1200, 3500), data: { type: 'seen' } };
+        }
+        const t = st.turns[st.turn];
+        if (st.phase === 'questions' && t && t.asker === p.id) {
+          // Give the humans a few seconds to read the turn before moving on
+          return { key: `q${r}-${st.turn}`, delay: between(4000, 6500), data: { type: 'next' } };
+        }
+        if (st.phase === 'voting' && !st.votes.has(p.id)) {
+          const others = ctx.players().filter((x) => x.id !== p.id);
+          const target = pick(others).id;
+          return { key: `v${r}`, delay: between(2500, 6000), data: { type: 'vote', target } };
+        }
+        if (st.phase === 'guess' && p.id === st.outsider) {
+          return { key: `g${r}`, delay: between(3000, 6000), data: { type: 'guess', word: pick(st.guessOptions) } };
+        }
+        return null;
       },
 
       onDisconnect(p) {
