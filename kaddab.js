@@ -22,11 +22,22 @@ function awards(stats, defs, exists) {
     .filter((a) => a.ids.length && a.ids.length <= Math.max(1, Math.floor(a.total / 2)));
 }
 
-function pickQuestion() {
-  let pool = QUESTIONS.map((_, i) => i).filter((i) => !used.has(i));
+const CATEGORIES = [
+  { value: 'mix', label: 'منوّع' },
+  { value: 'brands', label: 'شركات وتقنية' },
+  { value: 'food', label: 'أكل ويوميات' },
+  { value: 'animals', label: 'حيوانات' },
+  { value: 'body', label: 'جسم الإنسان' },
+  { value: 'world', label: 'غرائب العالم' },
+];
+
+// Pick an unplayed question from the chosen category; start over when the category runs out
+function pickQuestion(category) {
+  const fits = (i) => category === 'mix' || QUESTIONS[i].c === category;
+  let pool = QUESTIONS.map((_, i) => i).filter((i) => fits(i) && !used.has(i));
   if (!pool.length) {
-    used.clear();
-    pool = QUESTIONS.map((_, i) => i);
+    for (let i = 0; i < QUESTIONS.length; i++) if (fits(i)) used.delete(i);
+    pool = QUESTIONS.map((_, i) => i).filter(fits);
   }
   const i = pool[Math.floor(Math.random() * pool.length)];
   used.add(i);
@@ -40,6 +51,7 @@ module.exports = {
   minPlayers: 2,
   winnerTitle: 'أكبر كذّاب',
   settings: [
+    { key: 'category', label: 'نوع الأسئلة', default: 'mix', options: CATEGORIES },
     { key: 'rounds', label: 'عدد الجولات', default: 5, options: options([3, 5, 7, 10], ar) },
     { key: 'writeTime', label: 'وقت كتابة الكذبة', default: 60, options: options([30, 45, 60, 90], seconds) },
     { key: 'voteTime', label: 'وقت التصويت', default: 30, options: options([20, 30, 45], seconds) },
@@ -66,7 +78,7 @@ module.exports = {
 
     function nextRound() {
       st.round++;
-      st.question = pickQuestion();
+      st.question = pickQuestion(cfg.category);
       st.lies.clear();
       st.votes.clear();
       st.options = [];
