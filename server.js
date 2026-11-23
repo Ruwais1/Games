@@ -6,24 +6,25 @@ const path = require('path');
 const crypto = require('crypto');
 const { Server } = require('socket.io');
 const QRCode = require('qrcode');
-const QUESTIONS = require('./questions');
+const { normalize, cleanText } = require('./util');
 
-// ===== الإعدادات =====
+// الألعاب المتوفرة. لإضافة لعبة جديدة: سوِّ ملف لها بنفس الشكل وأضفها هنا
+const GAMES = {
+  kaddab: require('./kaddab'),
+  outsider: require('./outsider'),
+  detective: require('./detective'),
+};
+
 const PORT = process.env.PORT || 3000;
-const WRITE_SECONDS = Number(process.env.WRITE_SECONDS) || 60;
-const VOTE_SECONDS = Number(process.env.VOTE_SECONDS) || 30;
-const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 8;
 const MAX_NAME = 14;
-const MAX_LIE = 40;
-const TRUTH_POINTS = 2; // لمن يختار الصح
-const FOOL_POINTS = 1;  // لصاحب الكذبة عن كل شخص انخدع فيها
-const ROUND_CHOICES = [3, 5, 7, 10];
+// Test players that play on their own, for trying the games without people
+const BOT_NAMES = ['بوت سعد', 'بوت نورة', 'بوت فيصل', 'بوت ريم', 'بوت مشاري', 'بوت لولو', 'بوت عبود', 'بوت دانة'];
+const PUBLIC = path.join(__dirname, 'Public');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const PUBLIC = path.join(__dirname, 'Public');
 
 app.get('/', (req, res) => res.sendFile(path.join(PUBLIC, 'player.html')));
 app.get('/host', (req, res) => res.sendFile(path.join(PUBLIC, 'host.html')));
@@ -51,6 +52,7 @@ app.get('/qr', async (req, res) => {
       }
       url = u.origin + '/';
     }
+    if (req.query.room) url += '?room=' + encodeURIComponent(req.query.room);
     const dataUrl = await QRCode.toDataURL(url, {
       margin: 1,
       width: 520,
@@ -62,239 +64,174 @@ app.get('/qr', async (req, res) => {
   }
 });
 
-// ===== حالة اللعبة (موجودة في السيرفر فقط) =====
-const game = {
-  phase: 'lobby', // lobby | writing | voting | reveal | final
+// ===== Rooms: each family gets its own code and its own game =====
+const rooms = new Map(); // code -> room
+
+function newCode() {
+  let code;
+  do code = String(1000 + Math.floor(Math.random() * 9000));
+  while (rooms.has(code));
+  return code;
+}
+
+function createRoom(code) {
+  const hostsRoom = 'hosts:' + code;
+  let lastSeen = Date.now();
+
+// ===== الجلسة: اللاعبين يدخلون مرة، ويلعبون كل الألعاب =====
+const defaults = (schema) => Object.fromEntries(schema.map((s) => [s.key, s.default]));
+const session = {
+  stage: 'lobby', // lobby | playing
+  selected: 'kaddab',
+  settings: Object.fromEntries(Object.entries(GAMES).map(([k, g]) => [k, defaults(g.settings)])),
   players: new Map(), // id -> { id, name, score, connected, socketId }
-  rounds: 5,
-  round: 0,
-  used: new Set(),
-  question: null,
-  lies: new Map(), // playerId -> text
-  options: [], // { id, text, truth, authors, voters }
-  votes: new Map(), // playerId -> optionId
-  gains: {},
-  deadline: 0,
-  duration: 0,
 };
 const tokens = new Map(); // رمز سري محفوظ في الجوال -> playerId
-let timer = null;
+let game = null; // اللعبة الشغالة الحين
 
-const connectedPlayers = () => [...game.players.values()].filter((p) => p.connected);
+const ctx = {
+  players: () => [...session.players.values()],
+  connected: () => [...session.players.values()].filter((p) => p.connected),
+  get: (id) => session.players.get(id),
+  broadcast: () => broadcast(),
+};
 
-// توحيد الكتابة العربية عشان "أسود" و"اسود" و"الأسود" تُحسب نفس الشي
-function normalize(s) {
-  return String(s)
-    .toLowerCase()
-    .replace(/[\u064B-\u0652\u0640]/g, '')
-    .replace(/[إأآٱ]/g, 'ا')
-    .replace(/ى/g, 'ي')
-    .replace(/ة/g, 'ه')
-    .replace(/ؤ/g, 'و')
-    .replace(/ئ/g, 'ي')
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
-    .split(' ')
-    .map((w) => w.replace(/^ال(?=..)/, ''))
-    .join('');
-}
-
-function isTruth(text) {
-  const n = normalize(text);
-  return [game.question.a, ...(game.question.alt || [])].some((x) => normalize(x) === n);
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function pickQuestion() {
-  let pool = QUESTIONS.map((_, i) => i).filter((i) => !game.used.has(i));
-  if (!pool.length) {
-    game.used.clear();
-    pool = QUESTIONS.map((_, i) => i);
-  }
-  const i = pool[Math.floor(Math.random() * pool.length)];
-  game.used.add(i);
-  return QUESTIONS[i];
-}
-
-function setPhase(phase, seconds = 0) {
-  clearTimeout(timer);
-  timer = null;
-  game.phase = phase;
-  game.duration = seconds * 1000;
-  game.deadline = seconds ? Date.now() + game.duration : 0;
-  if (seconds) timer = setTimeout(onTimeout, game.duration);
-  broadcast();
-}
-
-function onTimeout() {
-  if (game.phase === 'writing') startVoting();
-  else if (game.phase === 'voting') reveal();
-}
-
-function startGame(rounds) {
-  for (const [id, p] of game.players) if (!p.connected) game.players.delete(id);
-  for (const [t, id] of tokens) if (!game.players.has(id)) tokens.delete(t);
-  for (const p of game.players.values()) p.score = 0;
-  game.rounds = rounds;
-  game.round = 0;
-  nextRound();
-}
-
-function nextRound() {
-  game.round++;
-  game.question = pickQuestion();
-  game.lies.clear();
-  game.votes.clear();
-  game.options = [];
-  game.gains = {};
-  setPhase('writing', WRITE_SECONDS);
-}
-
-function startVoting() {
-  const opts = [{ text: game.question.a, truth: true, authors: [] }];
-  for (const [pid, text] of game.lies) opts.push({ text, truth: false, authors: [pid] });
-  game.options = shuffle(opts).map((o, i) => ({ ...o, id: 'o' + i, voters: [] }));
-  setPhase('voting', VOTE_SECONDS);
-}
-
-function reveal() {
-  const gains = {};
-  for (const p of game.players.values()) gains[p.id] = 0;
-  for (const [pid, oid] of game.votes) {
-    const o = game.options.find((x) => x.id === oid);
-    if (!o) continue;
-    o.voters.push(pid);
-    if (o.truth) gains[pid] = (gains[pid] || 0) + TRUTH_POINTS;
-    else for (const a of o.authors) if (a !== pid) gains[a] = (gains[a] || 0) + FOOL_POINTS;
-  }
-  for (const [pid, g] of Object.entries(gains)) {
-    const p = game.players.get(pid);
-    if (p) p.score += g;
-  }
-  game.gains = gains;
-  setPhase('reveal');
-}
-
-function backToLobby() {
-  game.round = 0;
-  game.question = null;
-  game.lies.clear();
-  game.votes.clear();
-  game.options = [];
-  game.gains = {};
-  for (const p of game.players.values()) p.score = 0;
-  setPhase('lobby');
-}
-
-// إذا الكل خلّص قبل الوقت، ننتقل مباشرة. ترجع true إذا انتقلت المرحلة.
-function checkProgress() {
-  const active = connectedPlayers();
-  if (!active.length) return false;
-  if (game.phase === 'writing' && active.every((p) => game.lies.has(p.id))) {
-    startVoting();
-    return true;
-  }
-  if (game.phase === 'voting' && active.every((p) => game.votes.has(p.id))) {
-    reveal();
-    return true;
-  }
-  return false;
-}
-
-// ===== اللي ينرسل للأجهزة =====
 function snapshot() {
-  const g = game;
   const s = {
-    phase: g.phase,
-    round: g.round,
-    rounds: g.rounds,
-    remaining: g.deadline ? Math.max(0, g.deadline - Date.now()) : 0,
-    duration: g.duration,
-    minPlayers: MIN_PLAYERS,
-    maxLie: MAX_LIE,
+    stage: session.stage,
+    selected: session.selected,
     maxName: MAX_NAME,
-    players: [...g.players.values()].map((p) => ({
-      id: p.id,
-      name: p.name,
-      score: p.score,
-      connected: p.connected,
-      done: g.phase === 'writing' ? g.lies.has(p.id) : g.phase === 'voting' ? g.votes.has(p.id) : false,
-    })),
-    question: g.question && g.phase !== 'lobby' ? g.question.q : null,
+    players: ctx.players().map((p) => ({ id: p.id, name: p.name, score: p.score, connected: p.connected, bot: !!p.bot })),
   };
-  // وقت التصويت: نرسل النصوص فقط، بدون مين كتبها ولا وين الصح
-  if (g.phase === 'voting') s.options = g.options.map((o) => ({ id: o.id, text: o.text }));
-  if (g.phase === 'reveal') {
-    s.options = g.options.map((o) => ({ id: o.id, text: o.text, truth: o.truth, authors: o.authors, voters: o.voters }));
-    s.gains = g.gains;
+  if (session.stage === 'lobby') {
+    s.games = Object.values(GAMES).map((g) => ({
+      key: g.key,
+      title: g.title,
+      tagline: g.tagline,
+      minPlayers: g.minPlayers,
+      maxPlayers: MAX_PLAYERS,
+      settings: g.settings,
+      values: session.settings[g.key],
+    }));
+  } else {
+    s.game = session.selected;
+    s.title = GAMES[session.selected].title;
+    s.g = game.snapshot();
   }
   return s;
 }
 
-function meView(p) {
-  const own = game.options.find((o) => o.authors.includes(p.id));
-  return {
-    id: p.id,
-    name: p.name,
-    score: p.score,
-    lie: game.lies.get(p.id) || null,
-    vote: game.votes.get(p.id) || null,
-    ownOption: own ? own.id : null,
-    gain: game.phase === 'reveal' ? game.gains[p.id] || 0 : null,
-  };
+// Each bot asks the game what to do next; a move runs once, after a human-like delay
+function driveBots() {
+  if (!game || !game.botMove) return;
+  for (const p of session.players.values()) {
+    if (!p.bot) continue;
+    const plan = game.botMove(p);
+    if (!plan || p.botKey === plan.key) continue;
+    p.botKey = plan.key;
+    const current = game;
+    setTimeout(() => {
+      if (game !== current || !session.players.has(p.id)) return;
+      const again = game.botMove(p);
+      if (again && again.key === plan.key) game.action(p, again.data, () => {});
+    }, plan.delay);
+  }
+}
+
+function addBot() {
+  if (session.players.size >= MAX_PLAYERS) return;
+  const taken = new Set(ctx.players().map((p) => p.name));
+  const name = BOT_NAMES.find((n) => !taken.has(n));
+  if (!name) return;
+  const id = 'bot-' + crypto.randomBytes(4).toString('hex');
+  session.players.set(id, { id, name, score: 0, connected: true, socketId: null, bot: true });
 }
 
 function broadcast() {
   const s = snapshot();
-  io.to('hosts').emit('state', s);
-  for (const p of game.players.values()) {
-    if (p.socketId) io.to(p.socketId).emit('state', { ...s, me: meView(p) });
+  io.to(hostsRoom).emit('state', s);
+  lastSeen = Date.now();
+  for (const p of session.players.values()) {
+    if (!p.socketId) continue;
+    const me = { id: p.id, name: p.name, score: p.score, g: game ? game.meView(p) : null };
+    io.to(p.socketId).emit('state', { ...s, me });
   }
+  driveBots();
 }
 
-const cleanText = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+function startGame() {
+  const def = GAMES[session.selected];
+  for (const [id, p] of session.players) if (!p.connected) session.players.delete(id);
+  for (const [t, id] of tokens) if (!session.players.has(id)) tokens.delete(t);
+  for (const p of session.players.values()) {
+    p.score = 0;
+    p.botKey = null;
+  }
+  game = def.create(ctx, { ...session.settings[def.key] });
+  session.stage = 'playing';
+  game.start();
+}
 
-io.on('connection', (socket) => {
+function endGame() {
+  if (game) game.stop();
+  game = null;
+  session.stage = 'lobby';
+  for (const p of session.players.values()) p.score = 0;
+  broadcast();
+}
+
+function attach(socket) {
   const ack = (cb) => (typeof cb === 'function' ? cb : () => {});
-  const isHost = () => socket.rooms.has('hosts');
-  const me = () => game.players.get(socket.data.playerId);
+  const isHost = () => socket.rooms.has(hostsRoom);
+  const me = () => session.players.get(socket.data.playerId);
 
   // ----- الشاشة -----
   socket.on('host:hello', () => {
-    socket.join('hosts');
+    socket.join(hostsRoom);
     socket.emit('state', snapshot());
   });
 
-  socket.on('host:start', (opts) => {
-    if (!isHost() || game.phase !== 'lobby') return;
-    if (connectedPlayers().length < MIN_PLAYERS) return;
-    const r = Number(opts && opts.rounds);
-    startGame(ROUND_CHOICES.includes(r) ? r : 5);
+  socket.on('host:select', (key) => {
+    if (!isHost() || session.stage !== 'lobby' || !GAMES[key]) return;
+    session.selected = key;
+    broadcast();
   });
 
-  socket.on('host:skip', () => {
-    if (!isHost()) return;
-    if (game.phase === 'writing') startVoting();
-    else if (game.phase === 'voting') reveal();
+  socket.on('host:setting', (data) => {
+    if (!isHost() || session.stage !== 'lobby' || !data) return;
+    const def = GAMES[data.game];
+    const setting = def && def.settings.find((s) => s.key === data.key);
+    if (!setting || !setting.options.some((o) => o.value === data.value)) return;
+    session.settings[def.key][setting.key] = data.value;
+    broadcast();
   });
 
-  socket.on('host:next', () => {
-    if (!isHost() || game.phase !== 'reveal') return;
-    if (game.round >= game.rounds) setPhase('final');
-    else nextRound();
+  socket.on('host:addBot', () => {
+    if (!isHost() || session.stage !== 'lobby') return;
+    addBot();
+    broadcast();
   });
 
-  socket.on('host:lobby', () => {
-    if (!isHost() || game.phase !== 'final') return;
-    backToLobby();
+  socket.on('host:clearBots', () => {
+    if (!isHost() || session.stage !== 'lobby') return;
+    for (const [id, p] of session.players) if (p.bot) session.players.delete(id);
+    broadcast();
+  });
+
+  socket.on('host:start', () => {
+    if (!isHost() || session.stage !== 'lobby') return;
+    if (ctx.connected().length < GAMES[session.selected].minPlayers) return;
+    startGame();
+  });
+
+  socket.on('host:action', (type) => {
+    if (!isHost() || !game || typeof type !== 'string') return;
+    game.hostAction(type);
+  });
+
+  socket.on('host:end', () => {
+    if (!isHost() || session.stage !== 'playing') return;
+    endGame();
   });
 
   // ----- الجوالات -----
@@ -305,22 +242,20 @@ io.on('connection', (socket) => {
     if (!token) return reply({ error: 'صار خطأ. حدّث الصفحة وجرّب مرة ثانية.' });
     if (!name) return reply({ error: 'اكتب اسمك.' });
 
-    let p = game.players.get(tokens.get(token));
-    const nameTaken = [...game.players.values()].some(
-      (o) => o !== p && normalize(o.name) === normalize(name)
-    );
+    let p = session.players.get(tokens.get(token));
+    const nameTaken = ctx.players().some((o) => o !== p && normalize(o.name) === normalize(name));
 
     if (!p) {
-      if (game.phase !== 'lobby') {
-        return reply({ error: 'اللعبة بدأت. تقدر تدخل أول ما تبدأ لعبة جديدة.', retry: true });
+      if (session.stage !== 'lobby') {
+        return reply({ error: 'اللعبة بدأت. تقدر تدخل أول ما يرجعون للقائمة.', retry: true });
       }
-      if (game.players.size >= MAX_PLAYERS) return reply({ error: `اللعبة مليانة (${MAX_PLAYERS} لاعبين).` });
+      if (session.players.size >= MAX_PLAYERS) return reply({ error: `العدد مكتمل (${MAX_PLAYERS} لاعبين).` });
       if (nameTaken) return reply({ error: 'الاسم مأخوذ، اختر غيره.' });
       p = { id: crypto.randomBytes(6).toString('hex'), name, score: 0, connected: true, socketId: socket.id };
-      game.players.set(p.id, p);
+      session.players.set(p.id, p);
       tokens.set(token, p.id);
     } else {
-      if (game.phase === 'lobby' && name !== p.name) {
+      if (session.stage === 'lobby' && name !== p.name) {
         if (nameTaken) return reply({ error: 'الاسم مأخوذ، اختر غيره.' });
         p.name = name;
       }
@@ -334,33 +269,11 @@ io.on('connection', (socket) => {
     broadcast();
   });
 
-  socket.on('player:lie', (text, cb) => {
+  socket.on('player:action', (data, cb) => {
     const reply = ack(cb);
     const p = me();
-    if (!p || game.phase !== 'writing') return reply({ error: 'انتهى وقت الكتابة.' });
-    if (game.lies.has(p.id)) return reply({ error: 'أرسلت كذبتك خلاص.' });
-    const lie = cleanText(text, MAX_LIE);
-    if (!lie) return reply({ error: 'اكتب كذبتك أول.' });
-    if (isTruth(lie)) return reply({ error: 'هذي الإجابة الصحيحة! اكتب كذبة بدالها.' });
-    if ([...game.lies.values()].some((l) => normalize(l) === normalize(lie))) {
-      return reply({ error: 'أحد سبقك بنفس الكذبة، جرّب غيرها.' });
-    }
-    game.lies.set(p.id, lie);
-    reply({ ok: true });
-    if (!checkProgress()) broadcast();
-  });
-
-  socket.on('player:vote', (optionId, cb) => {
-    const reply = ack(cb);
-    const p = me();
-    if (!p || game.phase !== 'voting') return reply({ error: 'انتهى وقت التصويت.' });
-    if (game.votes.has(p.id)) return reply({ error: 'صوّتت خلاص.' });
-    const o = game.options.find((x) => x.id === optionId);
-    if (!o) return reply({ error: 'هذا الاختيار مو موجود.' });
-    if (o.authors.includes(p.id)) return reply({ error: 'ما تقدر تختار كذبتك.' });
-    game.votes.set(p.id, o.id);
-    reply({ ok: true });
-    if (!checkProgress()) broadcast();
+    if (!p || !game || !data || typeof data.type !== 'string') return reply({ error: 'ما فيه لعبة شغالة.' });
+    game.action(p, data, reply);
   });
 
   socket.on('disconnect', () => {
@@ -368,13 +281,51 @@ io.on('connection', (socket) => {
     if (!p || p.socketId !== socket.id) return;
     p.connected = false;
     p.socketId = null;
-    if (!checkProgress()) broadcast();
+    if (game) game.onDisconnect(p);
+    else broadcast();
+  });
+}
+
+  return { code, attach, get lastSeen() { return lastSeen; } };
+}
+
+io.on('connection', (socket) => {
+  // The big screen asks for its old room if it still exists, otherwise gets a new one
+  socket.on('room:host', (code, cb) => {
+    if (typeof cb !== 'function') return;
+    if (socket.data.room) return cb({ code: socket.data.room });
+    let room = rooms.get(String(code));
+    if (!room) {
+      room = createRoom(newCode());
+      rooms.set(room.code, room);
+    }
+    socket.data.room = room.code;
+    room.attach(socket);
+    cb({ code: room.code });
+  });
+
+  // A phone joins the room whose code it scanned or typed
+  socket.on('room:join', (code, cb) => {
+    if (typeof cb !== 'function') return;
+    if (socket.data.room) return cb(socket.data.room === String(code) ? { ok: true } : { error: 'حدّث الصفحة عشان تدخل غرفة ثانية.' });
+    const room = rooms.get(String(code));
+    if (!room) return cb({ error: 'ما لقينا غرفة بهالرمز. تأكد منه من الشاشة.' });
+    socket.data.room = room.code;
+    room.attach(socket);
+    cb({ ok: true });
   });
 });
 
+// Forget rooms nobody used for 3 hours
+setInterval(() => {
+  for (const [code, room] of rooms) {
+    if (Date.now() - room.lastSeen > 3 * 60 * 60 * 1000) rooms.delete(code);
+  }
+}, 10 * 60 * 1000);
+
 server.listen(PORT, () => {
   const ip = lanAddress();
-  console.log(`الكذّاب شغالة على المنفذ ${PORT}`);
+  console.log(`الألعاب شغالة على المنفذ ${PORT}`);
   console.log(`  الشاشة:   http://localhost:${PORT}/host`);
   if (ip) console.log(`  الجوالات: http://${ip}:${PORT}/  (لازم نفس الواي فاي)`);
 });
