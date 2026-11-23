@@ -13,6 +13,7 @@ const GAMES = {
   kaddab: require('./kaddab'),
   outsider: require('./outsider'),
   detective: require('./detective'),
+  drawing: require('./drawing'),
 };
 
 const PORT = process.env.PORT || 3000;
