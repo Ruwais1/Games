@@ -25,6 +25,11 @@
   --accent-deep: #2C9A7F;
   --accent-ink: #13705A;
 }
+[data-game="drawing"] {
+  --accent: #B794F6;
+  --accent-deep: #7C4DCC;
+  --accent-ink: #5B2FA8;
+}
 [data-game="detective"] {
   --accent: #FF8A65;
   --accent-deep: #C4452B;

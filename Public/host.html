@@ -175,6 +175,14 @@
   .culprit .stamp { position: static; font-size: clamp(1.3rem, 1.8vw, 1.7rem); margin-top: -.6em; }
   .culprit .avatar { width: clamp(120px, 12vw, 170px); height: auto; }
   .culprit b { font-size: clamp(2rem, 3vw, 2.8rem); }
+  /* Wesh Rasamt? */
+  .sketch-frame { background: var(--paper); border-radius: 12px; padding: 10px; box-shadow: 6px 7px 0 rgba(0, 0, 0, .35); transform: rotate(-1deg); }
+  .sketch-frame canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 6px; }
+  .big-sketch { width: min(48vh, 80vw); margin: 0 auto; }
+  .draw-row { display: grid; grid-template-columns: minmax(240px, 46vh) 1fr; gap: clamp(20px, 3vw, 48px); align-items: center; }
+  .draw-row.reveal-row { grid-template-columns: minmax(200px, 34vh) 1fr minmax(220px, 280px); align-items: start; }
+  .artist-line { text-align: center; color: var(--mist); font-size: clamp(1.1rem, 1.7vw, 1.6rem); margin: 0; }
+  .artist-line b { color: var(--accent); font-family: var(--display); font-weight: 400; font-size: 1.3em; }
   .tools { position: fixed; bottom: 14px; left: 14px; display: flex; gap: .6rem; }
   .offline { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: var(--stamp); color: #fff; padding: .4em 1.1em; border-radius: 10px; }
 
@@ -369,6 +377,44 @@
     <div class="actions"><button class="btn" id="ds-next">التالي</button></div>
   </section>
 
+  <!-- Wesh Rasamt? -->
+  <section id="w-draw" hidden>
+    <div class="grow">
+      <h2 class="headline">الكل يرسم الحين 🎨</h2>
+      <p class="hint">كل واحد جاه في جواله شي يرسمه بالسر. لا تطالعون جوالات بعض!</p>
+    </div>
+    <ul class="chips" id="wd-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="w-guess" hidden>
+    <p class="artist-line" id="wg-artist"></p>
+    <div class="sketch-frame big-sketch"><canvas id="wg-canvas"></canvas></div>
+    <p class="hint">وش هذي؟ اكتبوا من جوالاتكم عنوان كذاب يخدع الباقين.</p>
+    <ul class="chips" id="wg-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="w-vote" hidden>
+    <p class="artist-line" id="wv-artist"></p>
+    <div class="draw-row">
+      <div class="sketch-frame"><canvas id="wv-canvas"></canvas></div>
+      <ul class="options tilt" id="wv-options"></ul>
+    </div>
+    <ul class="chips" id="wv-players"></ul>
+    <div class="actions"><button class="btn-quiet" data-skip>إنهاء الوقت الحين</button></div>
+  </section>
+
+  <section id="w-reveal" hidden>
+    <p class="artist-line" id="wr-artist"></p>
+    <div class="draw-row reveal-row">
+      <div class="sketch-frame"><canvas id="wr-canvas"></canvas></div>
+      <ul class="options tilt" id="wr-options"></ul>
+      <div class="board"><h3>النقاط</h3><ol id="wr-board"></ol></div>
+    </div>
+    <div class="actions"><button class="btn" id="wr-next">التالي</button></div>
+  </section>
+
   <!-- End of game -->
   <section id="final" hidden>
     <div class="final">
@@ -401,6 +447,7 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/art.js"></script>
+<script src="/sketch.js"></script>
 <script>
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => Number(n).toLocaleString('ar-SA');
@@ -522,6 +569,7 @@
   $('#add-bot').onclick = () => socket.emit('host:addBot');
   $('#da-next').onclick = () => socket.emit('host:action', 'next');
   $('#ds-next').onclick = () => socket.emit('host:action', 'next');
+  $('#wr-next').onclick = () => socket.emit('host:action', 'next');
   $('#clear-bots').onclick = () => socket.emit('host:clearBots');
   $('#back').onclick = () => socket.emit('host:end');
   $('#end').onclick = () => { if (confirm('تبي تنهي اللعبة وترجع للقائمة؟ النقاط راح تنمسح.')) socket.emit('host:end'); };
@@ -566,7 +614,7 @@
   function sectionId() {
     if (S.stage === 'lobby') return 'lobby';
     if (S.g.phase === 'final') return 'final';
-    return ({ kaddab: 'k-', outsider: 'o-', detective: 'd-' })[S.game] + S.g.phase;
+    return ({ kaddab: 'k-', outsider: 'o-', detective: 'd-', drawing: 'w-' })[S.game] + S.g.phase;
   }
 
   function render() {
@@ -578,7 +626,7 @@
     $('#end').hidden = !playing || id === 'final';
     if (playing) {
       $('#game-title').textContent = S.title;
-      $('#round').textContent = `${S.game === 'detective' ? 'القضية' : 'الجولة'} ${fmt(S.g.round)} من ${fmt(S.g.rounds)}`;
+      $('#round').textContent = S.g.label || `${S.game === 'detective' ? 'القضية' : 'الجولة'} ${fmt(S.g.round)} من ${fmt(S.g.rounds)}`;
       document.querySelectorAll('[data-next]').forEach((b) => (b.textContent = S.g.round >= S.g.rounds ? 'النتيجة النهائية' : 'الجولة الجاية'));
     }
     (renderers[id] || (() => {}))();
@@ -587,6 +635,17 @@
       onEnter(id);
     }
     tick();
+  }
+
+  // ----- Wesh Rasamt? helpers -----
+  // Paint the current drawing once per drawing; the guess screen replays it line by line
+  const shownSketch = {};
+  function showSketch(sel, animate) {
+    const d = S.g.drawing;
+    const key = `${S.g.round}:${d.index}`;
+    if (shownSketch[sel] === key) return;
+    shownSketch[sel] = key;
+    requestAnimationFrame(() => Sketch.show($(sel), d.strokes, animate));
   }
 
   // ----- Malaf Al-Qadiya helpers -----
@@ -672,6 +731,11 @@
     }
     if (id === 'o-result') sfx.stamp(0.1);
     if (id === 'd-intro') rollDifficulty(S.g.case.difficulty);
+    if (id === 'w-draw' || id === 'w-guess') sfx.chime();
+    if (id === 'w-reveal') {
+      const lies = S.g.options.filter((o) => !o.truth).length;
+      for (let i = 0; i <= lies; i++) sfx.stamp(i * 0.5 + 0.12);
+    }
     if (id === 'd-answer' || id === 'd-solution') sfx.stamp(0.1);
     if (id === 'd-question') sfx.chime();
     if (id !== 'd-intro' && 'speechSynthesis' in window) speechSynthesis.cancel();
@@ -823,6 +887,45 @@
         votes.append(li);
       }
       fillBoard($('#ox-board'), g.gains);
+    },
+
+    // ----- Wesh Rasamt? -----
+    'w-draw'() {
+      fillChips($('#wd-players'), S.g.done);
+    },
+    'w-guess'() {
+      showSketch('#wg-canvas', true);
+      $('#wg-artist').replaceChildren('رسمة ', el('b', null, nameOf(S.g.drawing.artist)));
+      fillChips($('#wg-players'), S.g.done);
+    },
+    'w-vote'() {
+      showSketch('#wv-canvas', false);
+      $('#wv-artist').replaceChildren('وش رسم ', el('b', null, nameOf(S.g.drawing.artist)), '؟');
+      $('#wv-options').replaceChildren(...S.g.options.map((o) => el('li', 'card', o.text)));
+      fillChips($('#wv-players'), S.g.done);
+    },
+    'w-reveal'() {
+      showSketch('#wr-canvas', false);
+      $('#wr-artist').replaceChildren('رسمة ', el('b', null, nameOf(S.g.drawing.artist)));
+      const box = $('#wr-options');
+      box.replaceChildren();
+      // Fake titles get stamped first, the real one last
+      const lies = S.g.options.filter((o) => !o.truth);
+      const order = new Map(lies.map((o, i) => [o.id, i]));
+      for (const o of S.g.options) {
+        const card = el('li', 'card' + (o.truth ? ' is-truth' : ''));
+        const stamp = el('span', 'stamp' + (o.truth ? ' truth' : ''), o.truth ? 'الصح' : `كذبة ${list(o.authors.map(nameOf))}`);
+        stamp.style.setProperty('--i', o.truth ? lies.length : order.get(o.id));
+        const voters = o.voters.map(nameOf);
+        const line = o.truth
+          ? (voters.length ? `عرفوها: ${list(voters)}` : 'ما أحد عرفها')
+          : (voters.length ? `انخدع: ${list(voters)}` : 'ما انخدع أحد');
+        card.append(stamp, el('span', null, o.text), el('span', 'who', line));
+        box.append(card);
+      }
+      fillBoard($('#wr-board'), S.g.gains);
+      const d = S.g.drawing;
+      $('#wr-next').textContent = d.index < d.total ? 'الرسمة الجاية' : S.g.round < S.g.rounds ? 'جولة رسم جديدة' : 'النتيجة النهائية';
     },
 
     // ----- Malaf Al-Qadiya -----

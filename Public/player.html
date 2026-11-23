@@ -69,6 +69,18 @@
   .cert img { width: 100%; max-width: 360px; height: auto; border-radius: 10px; box-shadow: 5px 6px 0 rgba(0, 0, 0, .35); -webkit-touch-callout: default; }
   .cert-actions { display: flex; gap: 10px; align-items: center; }
   .cert-tip { font-size: .85rem; }
+  /* Wesh Rasamt? */
+  .prompt-card { text-align: center; padding: .7em 1em; }
+  .prompt-card .label { color: var(--ink-soft); font-size: .95rem; }
+  .prompt-card b { display: block; font-family: var(--display); font-weight: 400; font-size: 1.8rem; line-height: 1.3; color: var(--accent-ink); }
+  .pad-frame { background: var(--paper); border-radius: 12px; padding: 6px; box-shadow: 4px 5px 0 rgba(0, 0, 0, .35); }
+  .pad-frame canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 8px; touch-action: none; }
+  .pad-frame.small { width: 70%; margin: 0 auto; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+  .swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--night-3); padding: 0; }
+  .swatch[aria-pressed="true"] { border-color: var(--paper); transform: scale(1.12); }
+  .tool { background: var(--night-2); color: var(--paper); border: 2px solid var(--night-3); border-radius: 10px; padding: .3em .7em; }
+  .tool[aria-pressed="true"] { background: var(--accent); color: var(--ink); border-color: var(--accent); }
   /* Malaf Al-Qadiya */
   .story { line-height: 1.8; font-size: 1.05rem; }
   .suspects.phone .suspect { background: var(--paper); }
@@ -78,6 +90,8 @@
   .case-ref[open] { display: flex; flex-direction: column; gap: 14px; }
   .case-ref .evidence { padding-top: 14px; }
   .letter { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--accent); color: var(--ink); font-family: var(--display); font-size: .85em; margin-inline-end: .4em; vertical-align: middle; }
+  .full-pack { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; text-decoration: none; }
+  .full-pack .btn { margin-top: 6px; }
   .banner {
     position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--stamp); color: #fff; padding: .6em 1em; border-radius: 10px; text-align: center;
@@ -200,6 +214,55 @@
     <p class="muted" id="ox-total"></p>
   </section>
 
+  <!-- Wesh Rasamt? -->
+  <section id="w-draw" hidden>
+    <div class="card prompt-card"><span class="label">ارسم بالسر:</span><b id="wd-prompt"></b></div>
+    <div class="pad-frame"><canvas id="wd-canvas"></canvas></div>
+    <div class="toolbar" id="wd-tools"></div>
+    <button class="btn" id="wd-send">أرسل الرسمة</button>
+    <p class="err" id="wd-err" role="alert"></p>
+  </section>
+
+  <section id="w-drawn" class="center" hidden>
+    <p class="status">تم 🎨</p>
+    <p class="muted">انتظر الباقين يخلصون رسماتهم.</p>
+  </section>
+
+  <section id="w-guess" hidden>
+    <div class="pad-frame small"><canvas id="wg-canvas"></canvas></div>
+    <h2 class="q">وش هذي؟</h2>
+    <form id="wg-form">
+      <input type="text" id="wg-lie" autocomplete="off" enterkeyhint="send" placeholder="اكتب عنوان يخدعهم" aria-label="عنوانك">
+      <button class="btn" type="submit" id="wg-send">أرسل العنوان</button>
+    </form>
+    <p class="err" id="wg-err" role="alert"></p>
+  </section>
+
+  <section id="w-artist" class="center" hidden>
+    <p class="status">هذي رسمتك 😏</p>
+    <p class="muted" id="wa-text"></p>
+  </section>
+
+  <section id="w-wait" class="center" hidden>
+    <p class="muted" id="ww-label"></p>
+    <p class="said" id="ww-mine"></p>
+    <p class="muted">انتظر الباقين.</p>
+  </section>
+
+  <section id="w-vote" hidden>
+    <div class="pad-frame small"><canvas id="wv-canvas"></canvas></div>
+    <h2 class="q">وش العنوان الصح؟</h2>
+    <div class="opts tilt" id="wv-opts"></div>
+    <p class="err" id="wv-err" role="alert"></p>
+  </section>
+
+  <section id="w-reveal" class="center" hidden>
+    <p class="score-big" id="wr-gain" dir="ltr"></p>
+    <p class="said" id="wr-verdict"></p>
+    <p id="wr-truth"></p>
+    <p class="muted" id="wr-total"></p>
+  </section>
+
   <!-- Malaf Al-Qadiya -->
   <section id="d-intro" hidden>
     <div class="case-badges">
@@ -269,6 +332,11 @@
       </div>
       <p class="muted cert-tip">وتقدر بعد تضغط مطوّل على الصورة وتحفظها.</p>
     </div>
+    <a class="card full-pack" id="full-pack" target="_blank" rel="noopener">
+      <b>عجبتكم؟</b>
+      <span>ألعاب وقضايا جديدة قريبًا بـ١٠ ريال</span>
+      <span class="btn">أبيها 🙋</span>
+    </a>
     <p class="muted">تبون تلعبون ثاني؟ ارجعوا للقائمة من الشاشة.</p>
   </section>
 
@@ -282,6 +350,7 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/art.js"></script>
+<script src="/sketch.js"></script>
 <script>
   const $ = (s) => document.querySelector(s);
   const fmt = (n) => Number(n).toLocaleString('ar-SA');
@@ -488,6 +557,7 @@
     if (g.phase === 'final') renderFinal();
     else if (S.game === 'kaddab') renderKaddab(fresh);
     else if (S.game === 'detective') renderDetective();
+    else if (S.game === 'drawing') renderDrawing();
     else renderOutsider(fresh);
     tick();
   }
@@ -647,6 +717,158 @@
     }
   }
   $('#oq-next').onclick = () => { $('#oq-next').disabled = true; act({ type: 'next' }, null, () => { $('#oq-next').disabled = false; }); };
+
+  // ----- Wesh Rasamt? -----
+  let lastDraft = 0;
+  const pad = Sketch.pad($('#wd-canvas'), () => {
+    // Save a draft every few seconds, so a drawing isn't lost if time runs out
+    if (Date.now() - lastDraft < 3000) return;
+    lastDraft = Date.now();
+    act({ type: 'draft', strokes: pad.strokes });
+  });
+  let padLap = null;
+  const shownSketch = {};
+
+  // Toolbar: colors, two brush sizes, undo and clear
+  (function buildTools() {
+    const box = $('#wd-tools');
+    const swatches = Sketch.COLORS.map((c, i) => {
+      const b = el('button', 'swatch');
+      b.type = 'button';
+      b.style.background = c;
+      b.setAttribute('aria-label', i === Sketch.COLORS.length - 1 ? 'ممحاة' : 'لون');
+      b.setAttribute('aria-pressed', String(i === 0));
+      b.onclick = () => {
+        pad.setColor(c);
+        swatches.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      };
+      return b;
+    });
+    const sizes = Sketch.SIZES.map((s, i) => {
+      const b = el('button', 'tool', i === 0 ? 'رفيع' : 'عريض');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(i === 0));
+      b.onclick = () => {
+        pad.setSize(s);
+        sizes.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      };
+      return b;
+    });
+    const undo = el('button', 'tool', '↶ تراجع');
+    undo.type = 'button';
+    undo.onclick = () => pad.undo();
+    const clear = el('button', 'tool', 'امسح');
+    clear.type = 'button';
+    clear.onclick = () => pad.clear();
+    box.append(...swatches, ...sizes, undo, clear);
+  })();
+
+  $('#wd-send').onclick = () => {
+    $('#wd-send').disabled = true;
+    act({ type: 'draw', strokes: pad.strokes }, $('#wd-err'), () => { $('#wd-send').disabled = false; });
+  };
+  $('#wg-form').onsubmit = (e) => {
+    e.preventDefault();
+    const text = $('#wg-lie').value.trim();
+    if (!text) { $('#wg-err').textContent = 'اكتب عنوان أول.'; return; }
+    $('#wg-send').disabled = true;
+    act({ type: 'lie', text }, $('#wg-err'), () => { $('#wg-send').disabled = false; });
+  };
+
+  function smallSketch(sel) {
+    const d = S.g.drawing;
+    const key = `${S.g.round}:${d.index}`;
+    if (shownSketch[sel] === key) return;
+    shownSketch[sel] = key;
+    requestAnimationFrame(() => Sketch.show($(sel), d.strokes));
+  }
+
+  function renderDrawing() {
+    const g = S.g;
+    const mine = S.me.g;
+    if (g.phase === 'draw') {
+      if (mine.drew || !mine.prompt) {
+        show('w-drawn');
+        return;
+      }
+      $('#wd-prompt').textContent = mine.prompt;
+      show('w-draw');
+      if (padLap !== g.round) {
+        padLap = g.round;
+        $('#wd-err').textContent = '';
+        requestAnimationFrame(() => pad.reset());
+      }
+      return;
+    }
+    const d = g.drawing;
+    if (g.phase === 'guess' || g.phase === 'vote') {
+      if (mine.isArtist) {
+        $('#wa-text').textContent = g.phase === 'guess' ? 'انتظر الباقين يكتبون عناوينهم الكذابة.' : 'انتظرهم يصوّتون. ادعِ إنهم يعرفونها!';
+        show('w-artist');
+        return;
+      }
+      if (g.phase === 'guess') {
+        if (mine.lie) {
+          $('#ww-label').textContent = 'عنوانك:';
+          $('#ww-mine').textContent = `«${mine.lie}»`;
+          show('w-wait');
+          return;
+        }
+        if ($('#w-guess').hidden || shownSketch['#wg-canvas'] !== `${g.round}:${d.index}`) {
+          $('#wg-lie').value = '';
+          $('#wg-err').textContent = '';
+          $('#wg-lie').maxLength = g.maxLie;
+        }
+        show('w-guess');
+        smallSketch('#wg-canvas');
+        return;
+      }
+      if (mine.vote) {
+        const o = g.options.find((x) => x.id === mine.vote);
+        $('#ww-label').textContent = 'اخترت:';
+        $('#ww-mine').textContent = o ? `«${o.text}»` : '';
+        show('w-wait');
+        return;
+      }
+      const box = $('#wv-opts');
+      box.replaceChildren();
+      for (const o of g.options) {
+        if (o.id === mine.ownOption) continue;
+        const b = el('button', 'card opt', o.text);
+        b.type = 'button';
+        b.onclick = () => {
+          box.querySelectorAll('button').forEach((x) => (x.disabled = true));
+          act({ type: 'vote', option: o.id }, $('#wv-err'), (res) => {
+            if (res.error) box.querySelectorAll('button').forEach((x) => (x.disabled = false));
+          });
+        };
+        box.append(b);
+      }
+      show('w-vote');
+      smallSketch('#wv-canvas');
+      return;
+    }
+    if (g.phase === 'reveal') {
+      const truth = g.options.find((o) => o.truth);
+      const picked = g.options.find((o) => o.id === mine.vote);
+      const own = g.options.find((o) => o.id === mine.ownOption);
+      const fooled = own ? own.voters.filter((v) => v !== S.me.id).map(nameOf) : [];
+      let v;
+      if (mine.isArtist) {
+        const right = truth ? truth.voters.map(nameOf) : [];
+        v = right.length ? `عرفوا رسمتك: ${right.join('، ')}` : 'محد عرف رسمتك 😅';
+      } else {
+        v = !picked ? 'ما لحقت تصوّت.' : picked.truth ? 'عرفتها!' : `انخدعت بعنوان ${picked.authors.map(nameOf).join(' و ')}.`;
+        if (fooled.length) v += ` وانخدع بعنوانك: ${fooled.join('، ')}.`;
+      }
+      $('#wr-gain').textContent = mine.gain ? `+${fmt(mine.gain)}` : 'صفر';
+      $('#wr-gain').classList.toggle('zero', !mine.gain);
+      $('#wr-verdict').textContent = v;
+      $('#wr-truth').textContent = truth ? `العنوان الصح: «${truth.text}»` : '';
+      $('#wr-total').textContent = `مجموعك: ${pts(S.me.score)}`;
+      show('w-reveal');
+    }
+  }
 
   // ----- Malaf Al-Qadiya -----
   const LETTERS = ['أ', 'ب', 'ج', 'د'];
@@ -973,6 +1195,11 @@
   }
 
   $('#cert-save').onclick = saveCert;
+
+  // Interest test: one tap opens WhatsApp with a ready-made message
+  const WHATSAPP = '966500000000';
+  const PACK_TEXT = 'أبي النسخة الكاملة من ألعاب السهرة 🎮';
+  $('#full-pack').href = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(PACK_TEXT)}`;
   $('#cert-share').onclick = async () => {
     try {
       const blob = await (await fetch(certUrl)).blob();
